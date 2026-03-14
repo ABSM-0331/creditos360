@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,7 +25,7 @@
             background-color: white;
             padding: 40px;
             border: 1px solid #ddd;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .encabezado {
@@ -103,6 +104,50 @@
         .fila-monto .valor {
             font-weight: 600;
             color: #007bff;
+        }
+
+        .tabla-pagos {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .tabla-pagos th,
+        .tabla-pagos td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+        }
+
+        .tabla-pagos th {
+            background-color: #f3f6fb;
+            color: #1f2937;
+            font-weight: 700;
+        }
+
+        .tabla-pagos td.num,
+        .tabla-pagos th.num {
+            text-align: right;
+        }
+
+        .badge-vencida {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #b91c1c;
+            background: #fee2e2;
+        }
+
+        .badge-tiempo {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #065f46;
+            background: #d1fae5;
         }
 
         .monto-total {
@@ -217,6 +262,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="recibo-container">
         <!-- Encabezado -->
@@ -270,45 +316,69 @@
                 <span class="etiqueta">Interés:</span>
                 <span class="valor"><?php echo htmlspecialchars($cobro['credito']['interes']); ?>%</span>
             </div>
+            <div class="fila-datos">
+                <span class="etiqueta">Saldo Pendiente:</span>
+                <span class="valor">$<?php echo number_format($cobro['credito']['saldo_pendiente'], 2, '.', ','); ?></span>
+            </div>
         </div>
 
         <!-- Datos del Pago -->
         <div class="seccion">
-            <div class="seccion-titulo">Detalle del Pago</div>
-            <div class="fila-datos">
-                <span class="etiqueta">Número de Pago:</span>
-                <span class="valor"><?php echo htmlspecialchars($cobro['pago']['numero_pago']); ?></span>
+            <div class="seccion-titulo">Detalle de los Pagos</div>
+            <div style="overflow-x: auto;">
+                <table class="tabla-pagos">
+                    <thead>
+                        <tr>
+                            <th># Pago</th>
+                            <th>Fecha Programada</th>
+                            <th>Estado</th>
+                            <th class="num">Interés</th>
+                            <th class="num">Monto Programado</th>
+                            <th class="num">Moratorio</th>
+                            <th class="num">Monto Cobrado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($cobro['pagos'] as $pago): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($pago['numero_pago']); ?></td>
+                                <td><?php echo date('d/m/Y', strtotime($pago['fecha_programada'])); ?></td>
+                                <td>
+                                    <?php if (!empty($pago['fue_vencida'])): ?>
+                                        <span class="badge-vencida">VENCIDA</span>
+                                    <?php else: ?>
+                                        <span class="badge-tiempo">A TIEMPO</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="num">$<?php echo number_format($pago['interes_programado'], 2, '.', ','); ?></td>
+                                <td class="num">$<?php echo number_format($pago['monto_programado'], 2, '.', ','); ?></td>
+                                <td class="num">$<?php echo number_format($pago['recargo_moratorio'], 2, '.', ','); ?></td>
+                                <td class="num">$<?php echo number_format($pago['monto_pagado'], 2, '.', ','); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
             </div>
-            <div class="fila-datos">
-                <span class="etiqueta">Fecha Programada:</span>
-                <span class="valor"><?php echo date('d/m/Y', strtotime($cobro['pago']['fecha_programada'])); ?></span>
-            </div>
-            <div class="fila-datos">
-                <span class="etiqueta">Monto Programado:</span>
-                <span class="valor">$<?php echo number_format($cobro['pago']['monto_programado'], 2, '.', ','); ?></span>
-            </div>
-            <?php if (!empty($cobro['pago']['interes_programado']) && $cobro['pago']['interes_programado'] > 0): ?>
-            <div class="fila-datos">
-                <span class="etiqueta">Interés Programado:</span>
-                <span class="valor">$<?php echo number_format($cobro['pago']['interes_programado'], 2, '.', ','); ?></span>
-            </div>
-            <?php endif; ?>
         </div>
 
         <!-- Resumen de Cobro -->
         <div class="seccion">
             <div class="seccion-titulo">Resumen de Cobro</div>
             <div class="fila-monto">
-                <span class="etiqueta">Monto a Cobrar:</span>
-                <span class="valor">$<?php echo number_format($cobro['pago']['monto_programado'], 2, '.', ','); ?></span>
+                <span class="etiqueta">Letras cobradas:</span>
+                <span class="valor"><?php echo number_format($cobro['resumen']['cantidad_pagos_cobrados']); ?></span>
             </div>
             <div class="fila-monto">
-                <span class="etiqueta">Monto Recibido:</span>
-                <span class="valor">$<?php echo number_format($cobro['pago']['monto_pagado'], 2, '.', ','); ?></span>
+                <span class="etiqueta">Total programado:</span>
+                <span class="valor">$<?php echo number_format($cobro['resumen']['total_programado'], 2, '.', ','); ?></span>
+            </div>
+            <div class="fila-monto">
+                <span class="etiqueta">Total moratorio:</span>
+                <span class="valor">$<?php echo number_format($cobro['resumen']['total_moratorio'], 2, '.', ','); ?></span>
             </div>
             <div class="monto-total">
                 <span class="etiqueta">Total Cobrado:</span>
-                <span class="valor">$<?php echo number_format($cobro['pago']['monto_pagado'], 2, '.', ','); ?></span>
+                <span class="valor">$<?php echo number_format($cobro['resumen']['total_cobrado'], 2, '.', ','); ?></span>
             </div>
         </div>
 
@@ -369,4 +439,5 @@
         </div>
     </div>
 </body>
+
 </html>

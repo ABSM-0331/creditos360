@@ -41,6 +41,16 @@ $simular = isset($_POST['simular']);
                     <p style="font-size: 13px; margin: 10px 0 0 0;">Haz clic en "Simular Crédito" para crear uno nuevo.</p>
                 </div>
             <?php else: ?>
+                <div style="margin-bottom: 14px;">
+                    <input
+                        type="text"
+                        id="buscadorCreditosAdmin"
+                        placeholder="Buscar crédito por ID, cliente, cobrador, tipo, estado o monto..."
+                        style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div id="sinResultadosCreditosAdmin" style="display: none; text-align: center; padding: 18px; margin-bottom: 10px; color: var(--text-muted); background: var(--bg-tertiary); border-radius: 8px;">
+                    No se encontraron créditos con ese criterio de búsqueda.
+                </div>
                 <div style="overflow-x: auto; border-radius: 8px;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead style="background: var(--bg-tertiary); position: sticky; top: 0;">
@@ -57,7 +67,7 @@ $simular = isset($_POST['simular']);
                                 <th style="padding: 12px; text-align: center; color: var(--text-secondary); font-weight: 600;">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="tbodyCreditosAdmin">
                             <?php foreach ($creditos as $credito): ?>
                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                     <td style="padding: 12px; text-align: center; color: var(--text-primary); font-weight: 500;">#<?= htmlspecialchars($credito['idcredito']) ?></td>
@@ -350,6 +360,7 @@ $simular = isset($_POST['simular']);
 
                     <div class="credito-actions">
                         <button type="button" class="btn-secondary" onclick="cerrarSimulador()">Cancelar</button>
+                        <button type="button" class="btn-secondary" onclick="imprimirSimulacion()">Imprimir Simulación</button>
                         <button type="button" class="btn-primary" onclick="guardarCredito()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -400,6 +411,7 @@ $simular = isset($_POST['simular']);
 
                     <div class="credito-actions">
                         <button type="button" class="btn-secondary" onclick="cerrarSimulador()">Cancelar</button>
+                        <button type="button" class="btn-secondary" onclick="imprimirSimulacion()">Imprimir Simulación</button>
                         <button type="button" class="btn-primary" onclick="guardarCredito()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -486,26 +498,143 @@ $simular = isset($_POST['simular']);
         <?php if ($simular): ?>
             abrirSimulador(false);
         <?php endif; ?>
+
+        inicializarBuscadorCreditosAdmin();
     });
+
+    function inicializarBuscadorCreditosAdmin() {
+        const buscador = document.getElementById('buscadorCreditosAdmin');
+        const tbody = document.getElementById('tbodyCreditosAdmin');
+        const sinResultados = document.getElementById('sinResultadosCreditosAdmin');
+
+        if (!buscador || !tbody) {
+            return;
+        }
+
+        buscador.addEventListener('input', function() {
+            const termino = this.value.toLowerCase().trim();
+            const filas = tbody.querySelectorAll('tr');
+            let visibles = 0;
+
+            filas.forEach((fila) => {
+                const textoFila = fila.textContent.toLowerCase();
+                const coincide = termino === '' || textoFila.includes(termino);
+                fila.style.display = coincide ? '' : 'none';
+
+                if (coincide) {
+                    visibles += 1;
+                }
+            });
+
+            if (sinResultados) {
+                sinResultados.style.display = visibles === 0 ? 'block' : 'none';
+            }
+        });
+    }
+
+    function imprimirSimulacion() {
+        const resultado = document.getElementById('resultadoSimulacion');
+        const cliente = document.getElementById('searchCliente')?.value || 'Cliente no especificado';
+        const tipo = document.getElementById('tipo')?.value || '-';
+        const monto = document.getElementById('monto')?.value || '0';
+        const pagos = document.getElementById('pagos')?.value || '0';
+        const interes = document.getElementById('interes')?.value || '0';
+        const fechaInicio = document.getElementById('fecha_inicio')?.value || '-';
+
+        if (!resultado || resultado.style.display === 'none' || resultado.innerHTML.trim() === '') {
+            Swal.fire({
+                title: 'Sin simulación',
+                text: 'Primero realiza una simulación para poder imprimirla.',
+                icon: 'info',
+                confirmButtonText: 'Aceptar'
+            });
+            return;
+        }
+
+        const contenido = resultado.cloneNode(true);
+        contenido.querySelectorAll('.credito-actions, #guardarCreditoForm').forEach((nodo) => nodo.remove());
+        contenido.querySelectorAll('.credito-table-container').forEach((nodo) => {
+            nodo.style.maxHeight = 'none';
+            nodo.style.overflow = 'visible';
+        });
+        contenido.querySelectorAll('thead').forEach((nodo) => {
+            nodo.style.position = 'static';
+            nodo.style.top = 'auto';
+        });
+
+        const ventana = window.open('', 'impresion_simulacion', 'width=1000,height=900,scrollbars=yes');
+        if (!ventana) {
+            Swal.fire({
+                title: 'No se pudo abrir la impresión',
+                text: 'Revisa que tu navegador permita ventanas emergentes.',
+                icon: 'warning',
+                confirmButtonText: 'Aceptar'
+            });
+            return;
+        }
+
+        ventana.document.write(`
+            <!DOCTYPE html>
+            <html lang="es">
+            <head>
+                <meta charset="UTF-8">
+                <title>Simulación de Crédito</title>
+                <style>
+                    body { font-family: Arial, sans-serif; color: #111827; padding: 24px; }
+                    h1 { margin: 0 0 8px; font-size: 22px; }
+                    .sub { margin: 0 0 18px; color: #4b5563; font-size: 13px; }
+                    .datos { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 8px 20px; margin-bottom: 16px; }
+                    .dato { font-size: 13px; }
+                    .dato b { color: #111827; }
+                    .credito-stats-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin: 14px 0 18px; }
+                    .stat-box { border: 1px solid #d1d5db; border-radius: 8px; padding: 10px; }
+                    .stat-label { margin: 0 0 4px; font-size: 11px; color: #6b7280; text-transform: uppercase; }
+                    .stat-value { margin: 0; font-size: 15px; font-weight: 700; }
+                    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                    th, td { border: 1px solid #e5e7eb; padding: 7px; text-align: center; }
+                    th { background: #f3f4f6; font-weight: 700; }
+                    .credito-table-container { max-height: none !important; overflow: visible !important; }
+                    tr { page-break-inside: avoid; }
+                    .credito-info-box { padding: 10px; border-radius: 8px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 12px; }
+                    @media print { body { padding: 0; } }
+                </style>
+            </head>
+            <body>
+                <h1>Simulación de Crédito</h1>
+                <p class="sub">Documento informativo para explicar la estructura del crédito y sus pagos.</p>
+
+                <div class="datos">
+                    <div class="dato"><b>Cliente:</b> ${cliente}</div>
+                    <div class="dato"><b>Tipo:</b> ${tipo}</div>
+                    <div class="dato"><b>Monto:</b> $${Number(monto).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div class="dato"><b>Pagos:</b> ${pagos}</div>
+                    <div class="dato"><b>Interés:</b> ${interes}%</div>
+                    <div class="dato"><b>Fecha inicio:</b> ${fechaInicio}</div>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 10px 0 16px;">
+
+                ${contenido.innerHTML}
+            </body>
+            </html>
+        `);
+
+        ventana.document.close();
+        ventana.focus();
+        ventana.print();
+    }
 
     function actualizarConfig() {
         const tipo = document.getElementById('tipo').value;
         if (configuracionesData[tipo]) {
-            // Solo actualizar si los valores están vacíos o son por defecto
             const pagosInput = document.getElementById('pagos');
             const interesInput = document.getElementById('interes');
             const moratorioInput = document.getElementById('moratorio');
 
-            // Si no hay valores en los inputs, usar los de configuración
-            if (!pagosInput.value || pagosInput.value == '') {
-                pagosInput.value = configuracionesData[tipo].pagos;
-            }
-            if (!interesInput.value || interesInput.value == '') {
-                interesInput.value = configuracionesData[tipo].interes;
-            }
-            if (!moratorioInput.value || moratorioInput.value == '') {
-                moratorioInput.value = configuracionesData[tipo].moratorio;
-            }
+            // Al cambiar el tipo, se cargan sus valores por defecto.
+            pagosInput.value = configuracionesData[tipo].pagos;
+            interesInput.value = configuracionesData[tipo].interes;
+            moratorioInput.value = configuracionesData[tipo].moratorio;
         }
 
         // Mostrar/ocultar campo de fecha según el tipo
@@ -703,9 +832,18 @@ $simular = isset($_POST['simular']);
     }
 
     // Función para enviar el formulario
-    function enviarFormularioCredito() {
+    function enviarFormularioCredito(confirmadoCreditoActivo = false) {
         // Usar fetch para enviar y mostrar respuesta sin recargar
         const form = document.getElementById('guardarCreditoForm');
+        let confirmarInput = form.querySelector('input[name="confirmar_credito_activo"]');
+        if (!confirmarInput) {
+            confirmarInput = document.createElement('input');
+            confirmarInput.type = 'hidden';
+            confirmarInput.name = 'confirmar_credito_activo';
+            form.appendChild(confirmarInput);
+        }
+        confirmarInput.value = confirmadoCreditoActivo ? '1' : '0';
+
         const formData = new FormData(form);
         fetch(form.action, {
                 method: 'POST',
@@ -726,6 +864,22 @@ $simular = isset($_POST['simular']);
                         confirmButtonText: 'OK'
                     }).then(() => {
                         limpiarFormulario();
+                    });
+                } else if (data.requiere_confirmacion && !confirmadoCreditoActivo) {
+                    const saldoPendiente = Number(data?.credito_activo?.saldo_pendiente || 0).toFixed(2);
+                    const idCreditoActivo = data?.credito_activo?.idcredito || 'N/A';
+
+                    Swal.fire({
+                        title: 'Cliente con crédito activo',
+                        text: `${data.mensaje} (Crédito #${idCreditoActivo}, saldo pendiente: $${saldoPendiente})`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, otorgar otro crédito',
+                        cancelButtonText: 'Cancelar'
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            enviarFormularioCredito(true);
+                        }
                     });
                 } else {
                     Swal.fire({
@@ -973,13 +1127,17 @@ $simular = isset($_POST['simular']);
                 case 'vencido':
                     estadoBadge = '<span style="display: inline-block; padding: 4px 8px; background: rgba(239, 68, 68, 0.1); color: rgb(239, 68, 68); border-radius: 4px; font-size: 11px; font-weight: 600;">VENCIDO</span>';
                     break;
+                case 'atrasado':
+                    estadoBadge = '<span style="display: inline-block; padding: 4px 8px; background: rgba(249, 115, 22, 0.1); color: rgb(249, 115, 22); border-radius: 4px; font-size: 11px; font-weight: 600;">ATRASADO</span>';
+                    break;
             }
 
             // Calcular saldo inicial (saldo vivo + capital programado)
             const saldoInicial = parseFloat(pago.saldo_vivo) + parseFloat(pago.capital_programado);
+            const estiloFila = obtenerEstiloFilaPagoAdmin(pago);
 
             tablaHTML += `
-                <tr style="border-bottom: 1px solid var(--border-color);">
+                <tr style="border-bottom: 1px solid var(--border-color); ${estiloFila}">
                     <td style="padding: 8px 5px;">${pago.numero_pago}</td>
                     <td style="padding: 8px 5px;">${formatearFecha(pago.fecha_programada)}</td>
                     <td style="padding: 8px 5px;">$${formatearMoneda(saldoInicial)}</td>
@@ -998,6 +1156,40 @@ $simular = isset($_POST['simular']);
             </div>
         `;
         document.getElementById('tablaPagos').innerHTML = tablaHTML;
+    }
+
+    function obtenerFechaHoySinHoraAdmin() {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        return hoy;
+    }
+
+    function esPagoDelDiaAdmin(pago) {
+        const estado = (pago.estado || '').toLowerCase();
+        if (estado !== 'pendiente') {
+            return false;
+        }
+
+        const fecha = new Date(`${pago.fecha_programada}T00:00:00`);
+        return fecha.getTime() === obtenerFechaHoySinHoraAdmin().getTime();
+    }
+
+    function obtenerEstiloFilaPagoAdmin(pago) {
+        const estado = (pago.estado || '').toLowerCase();
+
+        if (estado === 'pagado') {
+            return 'background: rgba(34, 197, 94, 0.12);';
+        }
+
+        if (estado === 'vencido' || estado === 'atrasado') {
+            return 'background: rgba(239, 68, 68, 0.12);';
+        }
+
+        if (esPagoDelDiaAdmin(pago)) {
+            return 'background: rgba(59, 130, 246, 0.14);';
+        }
+
+        return '';
     }
 
     function cerrarDetalleCredito() {

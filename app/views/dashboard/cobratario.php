@@ -46,6 +46,16 @@ $resumenCobratario = $resumenCobratario ?? [
                     <p>📭 No tienes créditos asignados aún.</p>
                 </div>
             <?php else: ?>
+                <div style="margin-bottom: 14px;">
+                    <input
+                        type="text"
+                        id="buscadorCreditosCobratario"
+                        placeholder="Buscar crédito por ID, cliente, tipo, estado o monto..."
+                        style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div id="sinResultadosCreditosCobratario" style="display: none; text-align: center; padding: 18px; margin-bottom: 10px; color: var(--text-muted); background: var(--bg-tertiary); border-radius: 8px;">
+                    No se encontraron créditos con ese criterio de búsqueda.
+                </div>
                 <div style="overflow-x: auto; border-radius: 8px;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead style="background: var(--bg-tertiary); position: sticky; top: 0;">
@@ -61,7 +71,7 @@ $resumenCobratario = $resumenCobratario ?? [
                                 <th style="padding: 12px; text-align: center; color: var(--text-secondary); font-weight: 600;">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="tbodyCreditosCobratario">
                             <?php foreach ($creditos as $credito): ?>
                                 <tr style="border-bottom: 1px solid var(--border-color);">
                                     <td style="padding: 12px; text-align: center; color: var(--text-primary); font-weight: 500;">#<?= htmlspecialchars($credito['idcredito']) ?></td>
@@ -176,15 +186,31 @@ $resumenCobratario = $resumenCobratario ?? [
     <div style="width: 100%; max-width: 460px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; padding: 18px;">
         <h3 style="margin: 0 0 12px 0; color: var(--text-primary);">Registrar cobro</h3>
         <p id="infoPagoCobro" style="margin: 0 0 14px 0; color: var(--text-secondary); font-size: 13px;"></p>
+        <div id="detallePagosCobro" style="display: none; margin: 0 0 14px 0; padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-size: 12px; max-height: 120px; overflow-y: auto;"></div>
+        <div id="alertaCobroAnticipado" style="display: none; margin: 0 0 14px 0; padding: 10px 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; color: rgb(180, 83, 9); font-size: 12px;"></div>
 
         <div style="display: grid; gap: 10px;">
             <div>
                 <label style="display:block; margin-bottom: 6px; color: var(--text-secondary); font-size: 12px;">Monto a cobrar</label>
                 <input id="montoCobro" type="number" step="0.01" readonly style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
             </div>
+            <div id="grupoAbonoCapital" style="display: none;">
+                <label style="display:block; margin-bottom: 6px; color: var(--text-secondary); font-size: 12px;">Abono a capital (opcional)</label>
+                <input id="abonoCapitalCobro" type="number" step="0.01" min="0" value="0" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                <p id="ayudaAbonoCapital" style="margin: 6px 0 0 0; color: var(--text-muted); font-size: 11px;"></p>
+            </div>
             <div>
                 <label style="display:block; margin-bottom: 6px; color: var(--text-secondary); font-size: 12px;">Efectivo recibido</label>
                 <input id="montoRecibidoCobro" type="number" step="0.01" min="0" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom: 6px; color: var(--text-secondary); font-size: 12px;">Forma de pago</label>
+                <select id="metodoPagoCobro" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta_debito">Tarjeta de débito</option>
+                    <option value="tarjeta_credito">Tarjeta de crédito</option>
+                </select>
             </div>
             <div>
                 <label style="display:block; margin-bottom: 6px; color: var(--text-secondary); font-size: 12px;">Cambio</label>
@@ -202,9 +228,14 @@ $resumenCobratario = $resumenCobratario ?? [
 <script>
     let cobroActual = {
         idCredito: null,
-        idPago: null,
+        pagosSeleccionados: [],
+        tipoCredito: '',
+        montoBaseCobro: 0,
+        abonoCapital: 0,
         montoCobro: 0,
+        tieneAnticipados: false,
     };
+    let pagosCreditoActual = [];
 
     function navegarSeccionCobratarioPorHash() {
         const hash = window.location.hash;
@@ -238,7 +269,40 @@ $resumenCobratario = $resumenCobratario ?? [
         }
     }
 
-    document.addEventListener('DOMContentLoaded', navegarSeccionCobratarioPorHash);
+    function inicializarBuscadorCreditosCobratario() {
+        const buscador = document.getElementById('buscadorCreditosCobratario');
+        const tbody = document.getElementById('tbodyCreditosCobratario');
+        const sinResultados = document.getElementById('sinResultadosCreditosCobratario');
+
+        if (!buscador || !tbody) {
+            return;
+        }
+
+        buscador.addEventListener('input', function() {
+            const termino = this.value.toLowerCase().trim();
+            const filas = tbody.querySelectorAll('tr');
+            let visibles = 0;
+
+            filas.forEach((fila) => {
+                const textoFila = fila.textContent.toLowerCase();
+                const coincide = termino === '' || textoFila.includes(termino);
+                fila.style.display = coincide ? '' : 'none';
+
+                if (coincide) {
+                    visibles += 1;
+                }
+            });
+
+            if (sinResultados) {
+                sinResultados.style.display = visibles === 0 ? 'block' : 'none';
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        navegarSeccionCobratarioPorHash();
+        inicializarBuscadorCreditosCobratario();
+    });
     window.addEventListener('hashchange', navegarSeccionCobratarioPorHash);
 
     // Funciones para ver detalle del crédito
@@ -288,6 +352,10 @@ $resumenCobratario = $resumenCobratario ?? [
     }
 
     function mostrarDetalleCredito(credito, pagos) {
+        pagosCreditoActual = Array.isArray(pagos) ? pagos : [];
+        cobroActual.idCredito = credito.idcredito;
+        cobroActual.pagosSeleccionados = [];
+
         // Mostrar información del crédito
         const estadoColor = {
             'activo': 'rgb(34, 197, 94)',
@@ -384,14 +452,32 @@ $resumenCobratario = $resumenCobratario ?? [
         `;
         document.getElementById('statsCredito').innerHTML = statsHTML;
 
-        // Mostrar tabla de pagos
-        const pagoCorrespondiente = obtenerPagoCorrespondiente(pagos);
+        const pagosSeleccionables = obtenerPagosSeleccionables(pagos);
+        const puedeSeleccionarTodos = pagosSeleccionables.length > 0;
+        const estiloBotonSeleccion = puedeSeleccionarTodos ?
+            'padding: 8px 14px; background: rgb(34, 197, 94); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;' :
+            'padding: 8px 14px; background: var(--bg-tertiary); color: var(--text-muted); border: none; border-radius: 6px; cursor: not-allowed; font-size: 12px; font-weight: 600;';
 
         let tablaHTML = `
+            <div id="accionesCobroSeleccionado" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;">
+                <div>
+                    <p id="resumenSeleccionCobro" style="margin: 0; color: var(--text-secondary); font-size: 13px;">Selecciona una o varias letras pendientes para cobrarlas.</p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <label style="display: inline-flex; align-items: center; gap: 8px; color: var(--text-primary); font-size: 13px;">
+                        <input id="seleccionarTodosPagos" type="checkbox" onchange="alternarSeleccionTodos(this.checked)" ${puedeSeleccionarTodos ? '' : 'disabled'}>
+                        Seleccionar todas
+                    </label>
+                    <button type="button" id="btnCobrarSeleccionadas" onclick="abrirModalCobroSeleccionado()" style="${estiloBotonSeleccion}" disabled>
+                        Cobrar seleccionadas
+                    </button>
+                </div>
+            </div>
             <div class="credito-table-container" style="overflow-x: auto; max-height: 500px; border-radius: 8px;">
                 <table class="data-table" style="width: 100%; font-size: 12px;">
                     <thead style="position: sticky; top: 0; background: var(--bg-secondary);">
                         <tr>
+                            <th style="padding: 10px 5px;">Sel.</th>
                             <th style="padding: 10px 5px;">#</th>
                             <th style="padding: 10px 5px;">Fecha</th>
                             <th style="padding: 10px 5px;">Saldo Inicial</th>
@@ -427,19 +513,32 @@ $resumenCobratario = $resumenCobratario ?? [
 
             // Calcular saldo inicial (saldo vivo + capital programado)
             const saldoInicial = parseFloat(pago.saldo_vivo) + parseFloat(pago.capital_programado);
-            const puedeCobrar = pagoCorrespondiente && Number(pago.idpago) === Number(pagoCorrespondiente.idpago);
+            const montoCobroActual = obtenerMontoCobroPago(pago);
+            const puedeCobrar = esPagoSeleccionable(pago);
+            const esAnticipado = esPagoAnticipado(pago);
+            const estiloFila = obtenerEstiloFilaPago(pago);
             const accionCobro = puedeCobrar ?
-                `<button type="button" onclick="abrirModalCobro(${credito.idcredito}, ${pago.idpago}, ${Number(pago.monto_programado)})" style="padding: 6px 10px; background: var(--accent-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">Cobrar</button>` :
+                `<button type="button" onclick="abrirModalCobroIndividual(${credito.idcredito}, ${pago.idpago})" style="padding: 6px 10px; background: var(--accent-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">Cobrar</button>` :
                 '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+            const checkboxCobro = puedeCobrar ?
+                `<input type="checkbox" class="checkbox-pago-cobro" data-idpago="${pago.idpago}" onchange="toggleSeleccionPago(${credito.idcredito}, ${pago.idpago}, this.checked)">` :
+                '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+            const etiquetaAnticipado = esAnticipado ?
+                '<div style="margin-top: 4px; color: rgb(245, 158, 11); font-size: 10px; font-weight: 700;">ANTICIPADO</div>' :
+                '';
+            const etiquetaMoratorio = Number(pago.recargo_moratorio || 0) > 0 ?
+                `<div style="margin-top: 4px; color: rgb(239, 68, 68); font-size: 10px; font-weight: 700;">+ MORATORIO $${formatearMoneda(pago.recargo_moratorio)}</div>` :
+                '';
 
             tablaHTML += `
-                <tr style="border-bottom: 1px solid var(--border-color);">
+                <tr style="border-bottom: 1px solid var(--border-color); ${estiloFila}">
+                    <td style="padding: 8px 5px; text-align: center;">${checkboxCobro}</td>
                     <td style="padding: 8px 5px;">${pago.numero_pago}</td>
-                    <td style="padding: 8px 5px;">${formatearFecha(pago.fecha_programada)}</td>
+                    <td style="padding: 8px 5px;">${formatearFecha(pago.fecha_programada)}${etiquetaAnticipado}</td>
                     <td style="padding: 8px 5px;">$${formatearMoneda(saldoInicial)}</td>
                     <td style="padding: 8px 5px;">$${formatearMoneda(pago.capital_programado)}</td>
                     <td style="padding: 8px 5px;">$${formatearMoneda(pago.interes_programado)}</td>
-                    <td style="padding: 8px 5px; font-weight: 600;">$${formatearMoneda(pago.monto_programado)}</td>
+                    <td style="padding: 8px 5px; font-weight: 600;">$${formatearMoneda(montoCobroActual)}${etiquetaMoratorio}</td>
                     <td style="padding: 8px 5px;">$${formatearMoneda(pago.saldo_vivo)}</td>
                     <td style="padding: 8px 5px; text-align: center;">${estadoBadge}</td>
                     <td style="padding: 8px 5px; text-align: center;">${accionCobro}</td>
@@ -453,24 +552,119 @@ $resumenCobratario = $resumenCobratario ?? [
             </div>
         `;
         document.getElementById('tablaPagos').innerHTML = tablaHTML;
+        actualizarEstadoSeleccionPagos();
     }
 
-    function abrirModalCobro(idCredito, idPago, montoCobro) {
-        cobroActual.idCredito = idCredito;
-        cobroActual.idPago = idPago;
-        cobroActual.montoCobro = Number(montoCobro || 0);
+    function abrirModalCobro(idCredito, pagosSeleccionados) {
+        const pagos = Array.isArray(pagosSeleccionados) ? pagosSeleccionados : [];
+        const totalBaseCobro = pagos.reduce((acumulado, pago) => acumulado + obtenerMontoCobroPago(pago), 0);
+        const pagosAnticipados = pagos.filter((pago) => esPagoAnticipado(pago));
+        const esMensual = (pagos[0]?.tipo || '').toLowerCase() === 'mensual';
+        const saldoVivo = Number(pagos[0]?.saldo_vivo || 0);
+        const interesMensual = Number(pagos[0]?.interes_programado || 0);
+        const detallePagos = pagos
+            .map((pago) => {
+                const recargo = Number(pago.recargo_moratorio || 0);
+                const textoMoratorio = recargo > 0 ? ` (incluye moratorio $${formatearMoneda(recargo)})` : '';
+                return `Letra #${pago.numero_pago} · ${formatearFecha(pago.fecha_programada)} · $${formatearMoneda(obtenerMontoCobroPago(pago))}${textoMoratorio}`;
+            })
+            .join('<br>');
 
-        document.getElementById('infoPagoCobro').textContent = `Crédito #${idCredito} · Pago #${idPago}`;
+        cobroActual.idCredito = idCredito;
+        cobroActual.pagosSeleccionados = pagos.map((pago) => Number(pago.idpago));
+        cobroActual.tipoCredito = (pagos[0]?.tipo || '').toLowerCase();
+        cobroActual.montoBaseCobro = Number(totalBaseCobro || 0);
+        cobroActual.abonoCapital = 0;
+        cobroActual.montoCobro = Number(totalBaseCobro || 0);
+        cobroActual.tieneAnticipados = pagosAnticipados.length > 0;
+
+        document.getElementById('infoPagoCobro').textContent = pagos.length === 1 ?
+            `Crédito #${idCredito} · Letra #${pagos[0].numero_pago}` :
+            `Crédito #${idCredito} · ${pagos.length} letras seleccionadas`;
+        document.getElementById('detallePagosCobro').style.display = pagos.length > 0 ? 'block' : 'none';
+        document.getElementById('detallePagosCobro').innerHTML = detallePagos;
+        document.getElementById('alertaCobroAnticipado').style.display = cobroActual.tieneAnticipados ? 'block' : 'none';
+        document.getElementById('alertaCobroAnticipado').textContent = cobroActual.tieneAnticipados ?
+            `Se cobrarán ${pagosAnticipados.length} letra(s) antes de su fecha programada. Al continuar se te pedirá confirmación.` :
+            '';
+        document.getElementById('grupoAbonoCapital').style.display = esMensual ? 'block' : 'none';
+        document.getElementById('abonoCapitalCobro').value = '0';
+        document.getElementById('ayudaAbonoCapital').textContent = esMensual ?
+            `Pago minimo por interes: $${formatearMoneda(interesMensual)}. Capital actual: $${formatearMoneda(saldoVivo)}.` :
+            '';
         document.getElementById('montoCobro').value = cobroActual.montoCobro.toFixed(2);
         document.getElementById('montoRecibidoCobro').value = '';
+        document.getElementById('metodoPagoCobro').value = 'efectivo';
         document.getElementById('cambioCobro').value = '$0.00';
         document.getElementById('btnConfirmarCobro').disabled = true;
         document.getElementById('modalCobroPago').style.display = 'flex';
     }
 
-    function obtenerPagoCorrespondiente(pagos) {
+    function obtenerFechaHoySinHora() {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
+        return hoy;
+    }
+
+    function obtenerMontoCobroPago(pago) {
+        const montoActual = Number(pago.monto_cobro_actual || 0);
+        if (montoActual > 0) {
+            return montoActual;
+        }
+
+        const recargoMoratorio = Number(pago.recargo_moratorio || 0);
+        return Number(pago.monto_programado || 0) + recargoMoratorio;
+    }
+
+    function esPagoDelDia(pago) {
+        const estado = (pago.estado || '').toLowerCase();
+        if (estado !== 'pendiente') {
+            return false;
+        }
+
+        const fecha = new Date(`${pago.fecha_programada}T00:00:00`);
+        const hoy = obtenerFechaHoySinHora();
+        return fecha.getTime() === hoy.getTime();
+    }
+
+    function obtenerEstiloFilaPago(pago) {
+        const estado = (pago.estado || '').toLowerCase();
+
+        if (estado === 'pagado') {
+            return 'background: rgba(34, 197, 94, 0.12);';
+        }
+
+        if (estado === 'vencido' || estado === 'atrasado') {
+            return 'background: rgba(239, 68, 68, 0.12);';
+        }
+
+        if (esPagoDelDia(pago)) {
+            return 'background: rgba(59, 130, 246, 0.14);';
+        }
+
+        return '';
+    }
+
+    function esPagoSeleccionable(pago) {
+        const estado = (pago.estado || '').toLowerCase();
+        return ['pendiente', 'vencido', 'atrasado'].includes(estado);
+    }
+
+    function esPagoAnticipado(pago) {
+        if (!esPagoSeleccionable(pago)) {
+            return false;
+        }
+
+        const fecha = new Date(`${pago.fecha_programada}T00:00:00`);
+        return fecha > obtenerFechaHoySinHora();
+    }
+
+    function obtenerPagosSeleccionables(pagos) {
+        return (pagos || []).filter((pago) => esPagoSeleccionable(pago));
+    }
+
+    function obtenerPagoCorrespondiente(pagos) {
+        const hoy = obtenerFechaHoySinHora();
 
         return pagos.find((p) => {
             const estado = (p.estado || '').toLowerCase();
@@ -480,6 +674,119 @@ $resumenCobratario = $resumenCobratario ?? [
             const fecha = new Date(`${p.fecha_programada}T00:00:00`);
             return fecha <= hoy;
         });
+    }
+
+    function obtenerPagoSugerido(pagos) {
+        const pagoCorrespondiente = obtenerPagoCorrespondiente(pagos);
+        if (pagoCorrespondiente) {
+            return pagoCorrespondiente;
+        }
+
+        return obtenerPagosSeleccionables(pagos)[0] || null;
+    }
+
+    function obtenerPagoPorId(idPago) {
+        return pagosCreditoActual.find((pago) => Number(pago.idpago) === Number(idPago)) || null;
+    }
+
+    function obtenerPagosSeleccionados() {
+        return cobroActual.pagosSeleccionados
+            .map((idPago) => obtenerPagoPorId(idPago))
+            .filter(Boolean);
+    }
+
+    function toggleSeleccionPago(idCredito, idPago, seleccionado) {
+        if (Number(cobroActual.idCredito) !== Number(idCredito)) {
+            cobroActual.idCredito = idCredito;
+            cobroActual.pagosSeleccionados = [];
+        }
+
+        const idNormalizado = Number(idPago);
+        if (seleccionado) {
+            if (!cobroActual.pagosSeleccionados.includes(idNormalizado)) {
+                cobroActual.pagosSeleccionados.push(idNormalizado);
+            }
+        } else {
+            cobroActual.pagosSeleccionados = cobroActual.pagosSeleccionados.filter((id) => Number(id) !== idNormalizado);
+        }
+
+        actualizarEstadoSeleccionPagos();
+    }
+
+    function alternarSeleccionTodos(seleccionarTodo) {
+        const ids = seleccionarTodo ?
+            obtenerPagosSeleccionables(pagosCreditoActual).map((pago) => Number(pago.idpago)) : [];
+
+        cobroActual.pagosSeleccionados = ids;
+
+        document.querySelectorAll('.checkbox-pago-cobro').forEach((checkbox) => {
+            checkbox.checked = seleccionarTodo;
+        });
+
+        actualizarEstadoSeleccionPagos();
+    }
+
+    function actualizarEstadoSeleccionPagos() {
+        const resumen = document.getElementById('resumenSeleccionCobro');
+        const btnCobrar = document.getElementById('btnCobrarSeleccionadas');
+        const seleccionarTodos = document.getElementById('seleccionarTodosPagos');
+        const seleccionables = obtenerPagosSeleccionables(pagosCreditoActual);
+        const pagosSeleccionados = obtenerPagosSeleccionados();
+        const total = pagosSeleccionados.reduce((acumulado, pago) => acumulado + obtenerMontoCobroPago(pago), 0);
+        const anticipados = pagosSeleccionados.filter((pago) => esPagoAnticipado(pago)).length;
+
+        if (resumen) {
+            if (seleccionables.length === 0) {
+                resumen.textContent = 'Este crédito no tiene letras pendientes disponibles para cobro.';
+            } else if (pagosSeleccionados.length === 0) {
+                resumen.textContent = 'Selecciona una o varias letras pendientes para cobrarlas.';
+            } else {
+                const textoAnticipado = anticipados > 0 ? ` · ${anticipados} anticipada(s)` : '';
+                resumen.textContent = `${pagosSeleccionados.length} letra(s) seleccionada(s) · Total $${formatearMoneda(total)}${textoAnticipado}`;
+            }
+        }
+
+        if (btnCobrar) {
+            btnCobrar.disabled = pagosSeleccionados.length === 0;
+            btnCobrar.style.background = pagosSeleccionados.length === 0 ? 'var(--bg-tertiary)' : 'rgb(34, 197, 94)';
+            btnCobrar.style.color = pagosSeleccionados.length === 0 ? 'var(--text-muted)' : '#fff';
+            btnCobrar.style.cursor = pagosSeleccionados.length === 0 ? 'not-allowed' : 'pointer';
+        }
+
+        if (seleccionarTodos) {
+            seleccionarTodos.checked = seleccionables.length > 0 && pagosSeleccionados.length === seleccionables.length;
+            seleccionarTodos.indeterminate = pagosSeleccionados.length > 0 && pagosSeleccionados.length < seleccionables.length;
+        }
+    }
+
+    function abrirModalCobroIndividual(idCredito, idPago) {
+        const pago = obtenerPagoPorId(idPago);
+        if (!pago) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: 'No se encontró la letra seleccionada.',
+                confirmButtonText: 'Aceptar'
+            });
+            return;
+        }
+
+        abrirModalCobro(idCredito, [pago]);
+    }
+
+    function abrirModalCobroSeleccionado() {
+        const pagosSeleccionados = obtenerPagosSeleccionados();
+        if (pagosSeleccionados.length === 0) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Sin selección',
+                text: 'Selecciona al menos una letra para registrar el cobro.',
+                confirmButtonText: 'Aceptar'
+            });
+            return;
+        }
+
+        abrirModalCobro(cobroActual.idCredito, pagosSeleccionados);
     }
 
     function cobrarCreditoAsignado(idCredito) {
@@ -495,19 +802,19 @@ $resumenCobratario = $resumenCobratario ?? [
                     throw new Error(data.mensaje || 'No se pudo cargar el crédito');
                 }
 
-                const pago = obtenerPagoCorrespondiente(data.pagos || []);
+                const pago = obtenerPagoSugerido(data.pagos || []);
                 if (!pago) {
                     Swal.fire({
                         icon: 'info',
                         title: 'Sin pago por cobrar',
-                        text: 'Este crédito no tiene pagos pendientes para hoy o vencidos.',
+                        text: 'Este crédito no tiene letras pendientes por cobrar.',
                         confirmButtonText: 'Aceptar'
                     });
                     return;
                 }
 
                 window.location.hash = '#tablaCreditosCobratario';
-                abrirModalCobro(idCredito, pago.idpago, Number(pago.monto_programado));
+                abrirModalCobro(idCredito, [pago]);
             })
             .catch((error) => {
                 Swal.fire({
@@ -524,11 +831,16 @@ $resumenCobratario = $resumenCobratario ?? [
     }
 
     function actualizarCambioCobro() {
+        const abonoCapital = Number(document.getElementById('abonoCapitalCobro')?.value || 0);
+        cobroActual.abonoCapital = Math.max(0, abonoCapital);
+        cobroActual.montoCobro = cobroActual.montoBaseCobro + (cobroActual.tipoCredito === 'mensual' ? cobroActual.abonoCapital : 0);
+
         const recibido = Number(document.getElementById('montoRecibidoCobro').value || 0);
         const cambio = recibido - cobroActual.montoCobro;
         const cambioInput = document.getElementById('cambioCobro');
         const btnConfirmar = document.getElementById('btnConfirmarCobro');
 
+        document.getElementById('montoCobro').value = cobroActual.montoCobro.toFixed(2);
         cambioInput.value = `$${formatearMoneda(cambio)}`;
         cambioInput.style.color = cambio < 0 ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
         btnConfirmar.disabled = recibido < cobroActual.montoCobro;
@@ -536,6 +848,18 @@ $resumenCobratario = $resumenCobratario ?? [
 
     function confirmarCobroPago() {
         const montoRecibido = Number(document.getElementById('montoRecibidoCobro').value || 0);
+        const metodoPago = document.getElementById('metodoPagoCobro').value;
+
+        if (!metodoPago) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Forma de pago requerida',
+                text: 'Selecciona la forma de pago del cliente antes de continuar.',
+                confirmButtonText: 'Aceptar'
+            });
+            return;
+        }
+
         if (montoRecibido < cobroActual.montoCobro) {
             Swal.fire({
                 icon: 'warning',
@@ -546,49 +870,85 @@ $resumenCobratario = $resumenCobratario ?? [
             return;
         }
 
-        const formData = new FormData();
-        formData.append('idcredito', cobroActual.idCredito);
-        formData.append('idpago', cobroActual.idPago);
-        formData.append('monto_recibido', montoRecibido.toFixed(2));
+        const enviarCobro = (confirmarAnticipado) => {
+            const formData = new FormData();
+            formData.append('idcredito', cobroActual.idCredito);
+            formData.append('pagos', JSON.stringify(cobroActual.pagosSeleccionados));
+            formData.append('monto_recibido', montoRecibido.toFixed(2));
+            formData.append('abono_capital', (cobroActual.tipoCredito === 'mensual' ? cobroActual.abonoCapital : 0).toFixed(2));
+            formData.append('confirmar_anticipado', confirmarAnticipado ? '1' : '0');
+            formData.append('metodo_pago', metodoPago);
 
-        fetch('/proyecto-residencia/public/creditos/cobrar', {
-                method: 'POST',
-                body: formData,
-            })
-            .then((response) => response.json())
-            .then((data) => {
-                if (!data.success) {
-                    throw new Error(data.mensaje || 'No se pudo registrar el cobro');
+            fetch('/proyecto-residencia/public/creditos/cobrar', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then((response) => response.json())
+                .then((data) => {
+                    if (!data.success) {
+                        throw new Error(data.mensaje || 'No se pudo registrar el cobro');
+                    }
+
+                    const cambio = Number(data.cambio || 0);
+                    const idPago = data.idpago;
+                    const idCredito = data.idcredito;
+                    const pagosCobrados = Array.isArray(data.pagos_cobrados) ? data.pagos_cobrados : [];
+                    const recibos = Array.isArray(data.recibos) ? data.recibos : [];
+                    const historialIds = Array.isArray(data.historial_ids) ? data.historial_ids : [];
+                    const idCreditoActual = cobroActual.idCredito;
+
+                    cerrarModalCobro();
+                    Swal.fire({
+                        icon: 'success',
+                        title: pagosCobrados.length > 1 ? 'Cobros registrados' : 'Cobro registrado',
+                        html: `${pagosCobrados.length > 1 ? `${pagosCobrados.length} letras cobradas.` : 'Pago registrado.'} Cambio: <strong>$${formatearMoneda(cambio)}</strong><br><small>Se abrirá un recibo con el desglose completo.</small>`,
+                        confirmButtonText: 'Ver recibo'
+                    }).then(() => {
+                        if (historialIds.length > 0) {
+                            const urlRecibo = `/proyecto-residencia/public/creditos/recibo?historial=${historialIds.join(',')}&idcredito=${idCreditoActual}`;
+                            window.open(urlRecibo, 'recibo_cobro', 'width=900,height=1000,scrollbars=yes');
+                        } else if (recibos.length > 0 && recibos[0].idhistorial) {
+                            const urlRecibo = `/proyecto-residencia/public/creditos/recibo?historial=${recibos[0].idhistorial}&idcredito=${idCreditoActual}`;
+                            window.open(urlRecibo, 'recibo_cobro', 'width=900,height=1000,scrollbars=yes');
+                        } else if (idPago && idCredito) {
+                            const urlRecibo = `/proyecto-residencia/public/creditos/recibo?idpago=${idPago}&idcredito=${idCredito}`;
+                            window.open(urlRecibo, 'recibo_cobro', 'width=900,height=1000,scrollbars=yes');
+                        }
+
+                        verDetalleCredito(idCreditoActual);
+                    });
+                })
+                .catch((error) => {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: error.message,
+                        confirmButtonText: 'Aceptar'
+                    });
+                });
+        };
+
+        if (cobroActual.tieneAnticipados) {
+            cerrarModalCobro();
+            Swal.fire({
+                icon: 'warning',
+                title: 'Confirmar cobro anticipado',
+                text: 'Seleccionaste letras con fecha futura. ¿Deseas cobrarlas de todas formas?',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, cobrar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    enviarCobro(true);
+                    return;
                 }
 
-                const cambio = Number(data.cambio || 0);
-                const idPago = data.idpago;
-                const idCredito = data.idcredito;
-                
-                cerrarModalCobro();
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Cobro registrado',
-                    html: `Pago registrado. Cambio: <strong>$${formatearMoneda(cambio)}</strong><br><small>Se abrirá el recibo en una nueva ventana...</small>`,
-                    confirmButtonText: 'Ver recibo'
-                }).then(() => {
-                    // Abrir recibo en nueva ventana
-                    if (idPago && idCredito) {
-                        const urlRecibo = `/proyecto-residencia/public/creditos/recibo?idpago=${idPago}&idcredito=${idCredito}`;
-                        window.open(urlRecibo, 'recibo_cobro', 'width=900,height=1000,scrollbars=yes');
-                    }
-                    // Actualizar detalle del crédito
-                    verDetalleCredito(cobroActual.idCredito);
-                });
-            })
-            .catch((error) => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: error.message,
-                    confirmButtonText: 'Aceptar'
-                });
+                document.getElementById('modalCobroPago').style.display = 'flex';
             });
+            return;
+        }
+
+        enviarCobro(false);
     }
 
     function cerrarDetalleCredito() {
@@ -620,6 +980,11 @@ $resumenCobratario = $resumenCobratario ?? [
         const inputRecibido = document.getElementById('montoRecibidoCobro');
         if (inputRecibido) {
             inputRecibido.addEventListener('input', actualizarCambioCobro);
+        }
+
+        const inputAbonoCapital = document.getElementById('abonoCapitalCobro');
+        if (inputAbonoCapital) {
+            inputAbonoCapital.addEventListener('input', actualizarCambioCobro);
         }
 
         const modal = document.getElementById('modalCobroPago');

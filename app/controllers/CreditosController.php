@@ -63,6 +63,7 @@ class CreditosController
             $moratorio = floatval($_POST['moratorio'] ?? 0);
             $pagos = intval($_POST['pagos'] ?? 0);
             $fechaInicio = $_POST['fecha_inicio'] ?? date('Y-m-d');
+            $confirmarCreditoActivo = filter_var($_POST['confirmar_credito_activo'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             // Validaciones
             if (!$idcliente) {
@@ -94,6 +95,23 @@ class CreditosController
             $cobratario = $this->usuarioRepo->obtenerCobratarioPorId($idcobratario);
             if (!$cobratario) {
                 throw new Exception('Cobratario no encontrado');
+            }
+
+            // Validar si el cliente ya tiene un crédito activo no liquidado.
+            // Si existe y no se confirmó explícitamente, solicitar confirmación al frontend.
+            $creditoActivo = $this->creditosRepo->obtenerCreditoActivoCliente((int)$idcliente);
+            if ($creditoActivo && !$confirmarCreditoActivo) {
+                header('Content-Type: application/json');
+                echo json_encode([
+                    'success' => false,
+                    'requiere_confirmacion' => true,
+                    'mensaje' => 'El cliente ya tiene un crédito activo sin liquidar. ¿Deseas otorgar otro crédito de todos modos?',
+                    'credito_activo' => [
+                        'idcredito' => $creditoActivo['idcredito'] ?? null,
+                        'saldo_pendiente' => isset($creditoActivo['saldo_pendiente']) ? (float)$creditoActivo['saldo_pendiente'] : null,
+                    ]
+                ]);
+                exit;
             }
 
             // Preparar datos para guardar
@@ -176,25 +194,50 @@ class CreditosController
         }
 
         $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
-        if ($rol !== 3) {
+        $esAdmin = $rol === 1;
+        $esCobratario = $rol === 3;
+        if (!$esAdmin && !$esCobratario) {
             header('Content-Type: application/json');
             http_response_code(403);
-            echo json_encode(['success' => false, 'mensaje' => 'Solo el cobratario puede registrar cobros']);
+            echo json_encode(['success' => false, 'mensaje' => 'Solo el administrador o cobratario puede registrar cobros']);
             exit;
         }
 
         try {
             $idCredito = (int)($_POST['idcredito'] ?? 0);
             $idPago = (int)($_POST['idpago'] ?? 0);
+            $pagosRaw = $_POST['pagos'] ?? null;
             $montoRecibido = (float)($_POST['monto_recibido'] ?? 0);
+            $abonoCapital = (float)($_POST['abono_capital'] ?? 0);
+            $metodoPago = strtolower(trim((string)($_POST['metodo_pago'] ?? 'efectivo')));
+            $confirmarAnticipado = filter_var($_POST['confirmar_anticipado'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $idCobratario = (int)($_SESSION['idpersona'] ?? 0);
             $idUsuarioSesion = (int)($_SESSION['usuario_id'] ?? 0);
 
-            if ($idCredito <= 0 || $idPago <= 0) {
+            $metodosPermitidos = ['efectivo', 'transferencia', 'tarjeta_debito', 'tarjeta_credito'];
+            if (!in_array($metodoPago, $metodosPermitidos, true)) {
+                throw new Exception('Método de pago inválido');
+            }
+
+            $idPagos = [];
+            if (is_array($pagosRaw)) {
+                $idPagos = array_map('intval', $pagosRaw);
+            } elseif (is_string($pagosRaw) && $pagosRaw !== '') {
+                $pagosDecodificados = json_decode($pagosRaw, true);
+                if (is_array($pagosDecodificados)) {
+                    $idPagos = array_map('intval', $pagosDecodificados);
+                }
+            }
+
+            if (empty($idPagos) && $idPago > 0) {
+                $idPagos = [$idPago];
+            }
+
+            if ($idCredito <= 0 || empty($idPagos)) {
                 throw new Exception('Datos de pago inválidos');
             }
 
-            if ($idCobratario <= 0) {
+            if (!$esAdmin && $idCobratario <= 0) {
                 throw new Exception('No se encontró el cobratario en sesión');
             }
 
@@ -206,12 +249,20 @@ class CreditosController
                 throw new Exception('El monto recibido debe ser mayor a 0');
             }
 
-            $resultado = $this->creditosRepo->cobrarPagoCobratario(
-                $idPago,
+            if ($abonoCapital < 0) {
+                throw new Exception('El abono a capital no puede ser negativo');
+            }
+
+            $resultado = $this->creditosRepo->cobrarPagosCobratario(
+                $idPagos,
                 $idCredito,
                 $idCobratario,
                 $montoRecibido,
-                $idUsuarioSesion
+                $idUsuarioSesion,
+                $confirmarAnticipado,
+                $esAdmin,
+                $abonoCapital,
+                $metodoPago
             );
 
             header('Content-Type: application/json');
@@ -234,20 +285,32 @@ class CreditosController
         }
 
         $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
-        if ($rol !== 3) {
+        if ($rol !== 3 && $rol !== 1) {
             header('Location: /proyecto-residencia/public/dashboard');
             exit;
         }
 
         try {
-            $idPago = (int)($_GET['idpago'] ?? 0);
             $idCredito = (int)($_GET['idcredito'] ?? 0);
+            $idPago = (int)($_GET['idpago'] ?? 0);
+            $historialIds = [];
 
-            if ($idPago <= 0 || $idCredito <= 0) {
+            $historialRaw = $_GET['historial'] ?? null;
+            if (is_array($historialRaw)) {
+                $historialIds = array_map('intval', $historialRaw);
+            } elseif (is_string($historialRaw) && $historialRaw !== '') {
+                $historialIds = array_map('intval', array_filter(explode(',', $historialRaw)));
+            }
+
+            if ($idCredito <= 0 || (empty($historialIds) && $idPago <= 0)) {
                 throw new Exception('Datos inválidos para generar recibo');
             }
 
-            $datos = $this->creditosRepo->obtenerDatosReciboCobro($idPago, $idCredito);
+            if (!empty($historialIds)) {
+                $datos = $this->creditosRepo->obtenerDatosReciboCobro($historialIds, $idCredito);
+            } else {
+                $datos = $this->creditosRepo->obtenerDatosReciboCobroPorPago($idPago, $idCredito);
+            }
 
             if (!$datos['success']) {
                 throw new Exception($datos['error'] ?? 'Error al obtener datos del recibo');

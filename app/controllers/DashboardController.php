@@ -35,12 +35,20 @@ class DashboardController
             exit;
         }
 
+        $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
+        if ($rol !== 1 && $rol !== 3) {
+            header('location: /proyecto-residencia/public/dashboard');
+            exit;
+        }
+
         // Obtener el ID del cobratario desde la sesión (idpersona)
         $idCobratario = $_SESSION['idpersona'] ?? null;
 
-        // Obtener créditos asignados al cobratario
+        // Obtener créditos para cobranza
         $creditos = [];
-        if ($idCobratario) {
+        if ($rol === 1) {
+            $creditos = $this->creditosRepo->obtenerTodos();
+        } elseif ($idCobratario) {
             $creditos = $this->creditosRepo->obtenerCreditosCobratario($idCobratario);
         }
 
@@ -50,7 +58,13 @@ class DashboardController
         $totalCobrado = 0.0;
         $saldoPendienteTotal = 0.0;
 
-        if ($idCobratario) {
+        if ($rol === 1) {
+            foreach ($creditos as $credito) {
+                $totalPagar = (float)($credito['total_pagos'] ?? 0);
+                $saldoPendiente = (float)($credito['saldo_pendiente'] ?? 0);
+                $totalCobrado += max(0, $totalPagar - $saldoPendiente);
+            }
+        } elseif ($idCobratario) {
             $totalCobrado = $this->creditosRepo->obtenerTotalCobradoCobratario($idCobratario);
         }
 
