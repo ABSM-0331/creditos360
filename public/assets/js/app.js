@@ -156,6 +156,14 @@ if (fotoCobratario) {
     });
 }
 
+// Vista previa para formulario de empresa
+const fotoEmpresa = document.getElementById("empresa_logo");
+if (fotoEmpresa) {
+    fotoEmpresa.addEventListener("change", function (e) {
+        mostrarVistaPrevia(e.target, "empresaLogoPreview");
+    });
+}
+
 function mostrarVistaPrevia(input, previewId) {
     const previewDiv = document.getElementById(previewId);
     const file = input.files[0];

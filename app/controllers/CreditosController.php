@@ -5,6 +5,8 @@ class CreditosController
     private CreditosRepository $creditosRepo;
     private UsuarioRepository $usuarioRepo;
     private CreditosService $creditosService;
+    private TicketPrinterService $ticketPrinterService;
+    private EmailService $emailService;
 
     public function __construct()
     {
@@ -12,6 +14,8 @@ class CreditosController
         $this->creditosRepo = new CreditosRepository();
         $this->usuarioRepo = new UsuarioRepository();
         $this->creditosService = new CreditosService();
+        $this->ticketPrinterService = new TicketPrinterService();
+        $this->emailService = new EmailService();
     }
 
     public function index(): void
@@ -265,9 +269,14 @@ class CreditosController
                 $metodoPago
             );
 
+            if (!empty($resultado['success']) && !empty($resultado['historial_ids'])) {
+                $resultado['ticket_generado'] = true;
+                $resultado['ticket_url'] = '/proyecto-residencia/public/creditos/ver-ticket?historial=' . implode(',', (array)$resultado['historial_ids']) . '&idcredito=' . $idCredito;
+            }
+
             header('Content-Type: application/json');
             echo json_encode($resultado);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             header('Content-Type: application/json');
             http_response_code(400);
             echo json_encode([
@@ -321,6 +330,163 @@ class CreditosController
             require $view;
         } catch (Exception $e) {
             echo "Error: " . htmlspecialchars($e->getMessage());
+        }
+    }
+
+    public function verTicket(): void
+    {
+        if (!isset($_SESSION['usuario_id'])) {
+            header('Location: /proyecto-residencia/public/auth/login');
+            exit;
+        }
+
+        $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
+        $esAdmin = $rol === 1;
+        $esCobratario = $rol === 3;
+        if (!$esAdmin && !$esCobratario) {
+            header('Location: /proyecto-residencia/public/dashboard');
+            exit;
+        }
+
+        try {
+            $idPago = (int)($_GET['idpago'] ?? 0);
+            $idCredito = (int)($_GET['idcredito'] ?? 0);
+            $historialIds = [];
+
+            $historialRaw = $_GET['historial'] ?? null;
+            if (is_array($historialRaw)) {
+                $historialIds = array_map('intval', $historialRaw);
+            } elseif (is_string($historialRaw) && $historialRaw !== '') {
+                $historialIds = array_map('intval', array_filter(explode(',', $historialRaw)));
+            }
+
+            if ($idCredito <= 0 || (empty($historialIds) && $idPago <= 0)) {
+                throw new Exception('Datos inválidos para obtener el ticket');
+            }
+
+            if (!empty($historialIds)) {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobro($historialIds, $idCredito);
+            } else {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobroPorPago($idPago, $idCredito);
+            }
+
+            if (!$datosRecibo['success']) {
+                throw new Exception($datosRecibo['error'] ?? 'No se encontró el registro de cobro');
+            }
+
+            $cobro = $datosRecibo['cobro'];
+            $html = $this->ticketPrinterService->generarHtmlCobro($cobro);
+
+            header('Content-Type: text/html; charset=UTF-8');
+            echo $html;
+        } catch (Throwable $e) {
+            header('Content-Type: text/plain; charset=UTF-8');
+            http_response_code(400);
+            echo 'Error al generar ticket: ' . $e->getMessage();
+        }
+    }
+
+    public function enviarTicket(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Content-Type: application/json');
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+            exit;
+        }
+
+        if (!isset($_SESSION['usuario_id'])) {
+            header('Content-Type: application/json');
+            http_response_code(401);
+            echo json_encode(['success' => false, 'error' => 'No autorizado']);
+            exit;
+        }
+
+        $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
+        $esAdmin = $rol === 1;
+        $esCobratario = $rol === 3;
+        if (!$esAdmin && !$esCobratario) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'No tiene permisos para enviar tickets']);
+            exit;
+        }
+
+        try {
+            $idPago = (int)($_POST['idpago'] ?? 0);
+            $idCredito = (int)($_POST['idcredito'] ?? 0);
+            $historialIds = [];
+
+            $historialRaw = $_POST['historial'] ?? null;
+            if (is_array($historialRaw)) {
+                $historialIds = array_map('intval', $historialRaw);
+            } elseif (is_string($historialRaw) && $historialRaw !== '') {
+                $historialIds = array_map('intval', array_filter(explode(',', $historialRaw)));
+            }
+
+            if ($idCredito <= 0 || (empty($historialIds) && $idPago <= 0)) {
+                throw new Exception('Datos inválidos para enviar el ticket');
+            }
+
+            if (!empty($historialIds)) {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobro($historialIds, $idCredito);
+            } else {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobroPorPago($idPago, $idCredito);
+            }
+
+            if (!$datosRecibo['success']) {
+                throw new Exception($datosRecibo['error'] ?? 'No se encontró el registro de cobro');
+            }
+
+            $cobro = $datosRecibo['cobro'];
+            $correoDestino = trim((string)($_POST['correo'] ?? ''));
+            if ($correoDestino === '') {
+                $correoDestino = trim((string)($cobro['cliente']['email'] ?? ''));
+            }
+
+            if (!filter_var($correoDestino, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception('El cliente no tiene un correo válido para enviar el ticket');
+            }
+
+            $html = $this->ticketPrinterService->generarHtmlCobro($cobro);
+            $asunto = 'Ticket de pago ' . (string)($cobro['numero_recibo'] ?? '');
+
+            $from = 'no-reply@localhost';
+            $fromName = 'Sistema de Creditos';
+            if (class_exists('EmpresaService')) {
+                try {
+                    $empresa = (new EmpresaService())->obtenerDatos();
+                    $nombreEmpresa = trim((string)($empresa['nombre_empresa'] ?? ''));
+                    $correoEmpresa = trim((string)($empresa['correo'] ?? ''));
+                    if (filter_var($correoEmpresa, FILTER_VALIDATE_EMAIL)) {
+                        $from = $correoEmpresa;
+                    }
+                    if ($nombreEmpresa !== '') {
+                        $fromName = $nombreEmpresa;
+                    }
+                } catch (Throwable $e) {
+                    // mantener from por defecto
+                }
+            }
+
+            $this->emailService->enviarHtml($correoDestino, $asunto, $html, [
+                'from' => $from,
+                'from_name' => $fromName,
+            ]);
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'mensaje' => 'Ticket enviado correctamente',
+                'correo' => $correoDestino,
+            ]);
+        } catch (Throwable $e) {
+            header('Content-Type: application/json');
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

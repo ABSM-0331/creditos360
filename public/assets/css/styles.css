@@ -93,6 +93,14 @@ a:hover {
     color: var(--accent-blue);
 }
 
+.sidebar-logo-image {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid var(--border-color);
+}
+
 .sidebar-nav {
     flex: 1;
     padding: 1rem 0;

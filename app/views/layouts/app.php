@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gestión</title>
-    <link rel="stylesheet" href="/proyecto-residencia/public/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/styles.css">
 </head>
 
 <body>
@@ -28,7 +28,7 @@
         </main>
     </div>
 
-    <script src="/proyecto-residencia/public/assets/js/app.js"></script>
+    <script src="/assets/js/app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php if ($flashSuccess): ?>
         <script>

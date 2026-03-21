@@ -1,11 +1,30 @@
+<?php
+$empresaSidebar = [
+    'nombre_empresa' => 'GestionPro',
+    'logo_ruta' => null,
+];
+
+if (class_exists('EmpresaService')) {
+    try {
+        $empresaSidebar = array_merge($empresaSidebar, (new EmpresaService())->obtenerDatos());
+    } catch (Throwable $e) {
+        // Conservar valores por defecto cuando falle la consulta.
+    }
+}
+?>
+
 <aside class="sidebar">
     <div class="sidebar-header">
         <div class="logo">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-            </svg>
-            <span>GestiónPro</span>
+            <?php if (!empty($empresaSidebar['logo_ruta'])): ?>
+                <img src="/<?= htmlspecialchars($empresaSidebar['logo_ruta']) ?>" alt="Logo empresa" class="sidebar-logo-image">
+            <?php else: ?>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+            <?php endif; ?>
+            <span><?= htmlspecialchars($empresaSidebar['nombre_empresa'] ?: 'GestionPro') ?></span>
         </div>
     </div>
 
@@ -123,6 +142,15 @@
                             <line x1="13" y1="16" x2="13" y2="16.01"></line>
                         </svg>
                         <span>Créditos</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="/proyecto-residencia/public/empresa" class="nav-link <?= str_contains($currentPath, '/empresa') ? 'active' : '' ?>">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <path d="M7 7h10v10H7z"></path>
+                        </svg>
+                        <span>Empresa</span>
                     </a>
                 </li>
             <?php endif; ?>

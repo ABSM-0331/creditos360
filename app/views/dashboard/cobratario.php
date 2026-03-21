@@ -487,6 +487,7 @@ $resumenCobratario = $resumenCobratario ?? [
                             <th style="padding: 10px 5px;">Saldo Final</th>
                             <th style="padding: 10px 5px;">Estado</th>
                             <th style="padding: 10px 5px;">Acción</th>
+                            <th style="padding: 10px 5px;">Ticket</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -520,6 +521,16 @@ $resumenCobratario = $resumenCobratario ?? [
             const accionCobro = puedeCobrar ?
                 `<button type="button" onclick="abrirModalCobroIndividual(${credito.idcredito}, ${pago.idpago})" style="padding: 6px 10px; background: var(--accent-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">Cobrar</button>` :
                 '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+            const botónTicket = estadoPago === 'pagado' ?
+                `<button type="button" onclick="recuperarTicketPago(${credito.idcredito}, ${pago.idpago})" style="padding: 6px 10px; background: rgb(34, 197, 94); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 600;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Ver ticket
+                </button>` :
+                '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
             const checkboxCobro = puedeCobrar ?
                 `<input type="checkbox" class="checkbox-pago-cobro" data-idpago="${pago.idpago}" onchange="toggleSeleccionPago(${credito.idcredito}, ${pago.idpago}, this.checked)">` :
                 '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
@@ -542,6 +553,7 @@ $resumenCobratario = $resumenCobratario ?? [
                     <td style="padding: 8px 5px;">$${formatearMoneda(pago.saldo_vivo)}</td>
                     <td style="padding: 8px 5px; text-align: center;">${estadoBadge}</td>
                     <td style="padding: 8px 5px; text-align: center;">${accionCobro}</td>
+                    <td style="padding: 8px 5px; text-align: center;">${botónTicket}</td>
                 </tr>
             `;
         });
@@ -896,12 +908,18 @@ $resumenCobratario = $resumenCobratario ?? [
                     const recibos = Array.isArray(data.recibos) ? data.recibos : [];
                     const historialIds = Array.isArray(data.historial_ids) ? data.historial_ids : [];
                     const idCreditoActual = cobroActual.idCredito;
+                    const ticketGenerado = Boolean(data.ticket_generado);
+                    const ticketUrl = data.ticket_url || '';
+                    const ticketError = data.ticket_error || '';
+                    const ticketTexto = ticketGenerado ?
+                        (ticketUrl ? `<br><small><a href="${ticketUrl}" target="_blank" rel="noopener">Ver ticket del cobro</a></small>` : '<br><small>Ticket disponible para consulta.</small>') :
+                        (ticketError ? `<br><small>Ticket no disponible: ${ticketError}</small>` : '');
 
                     cerrarModalCobro();
                     Swal.fire({
                         icon: 'success',
                         title: pagosCobrados.length > 1 ? 'Cobros registrados' : 'Cobro registrado',
-                        html: `${pagosCobrados.length > 1 ? `${pagosCobrados.length} letras cobradas.` : 'Pago registrado.'} Cambio: <strong>$${formatearMoneda(cambio)}</strong><br><small>Se abrirá un recibo con el desglose completo.</small>`,
+                        html: `${pagosCobrados.length > 1 ? `${pagosCobrados.length} letras cobradas.` : 'Pago registrado.'} Cambio: <strong>$${formatearMoneda(cambio)}</strong><br><small>Se abrirá un recibo con el desglose completo.</small>${ticketTexto}`,
                         confirmButtonText: 'Ver recibo'
                     }).then(() => {
                         if (historialIds.length > 0) {
@@ -919,6 +937,7 @@ $resumenCobratario = $resumenCobratario ?? [
                     });
                 })
                 .catch((error) => {
+                    console.error('Error:', error);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error',
@@ -996,4 +1015,12 @@ $resumenCobratario = $resumenCobratario ?? [
             });
         }
     });
+
+    /**
+     * Recuperar/regenerar ticket de un pago ya registrado
+     */
+    function recuperarTicketPago(idCredito, idPago) {
+        const ticketUrl = `/proyecto-residencia/public/creditos/ver-ticket?idpago=${idPago}&idcredito=${idCredito}`;
+        window.open(ticketUrl, 'ticket_cobro', 'width=560,height=980,scrollbars=yes');
+    }
 </script>

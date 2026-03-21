@@ -7,6 +7,9 @@ class CreditosRepository
     public function __construct()
     {
         $this->db = DBC::get();
+        $this->asegurarColumnaGrupoCobro();
+        $this->asegurarTriggerSaldoCredito();
+        $this->normalizarSaldosCreditos();
     }
 
     /**
@@ -248,14 +251,7 @@ class CreditosRepository
                         WHEN pc.fecha_programada < CURDATE() THEN 'vencido'
                         ELSE pc.estado
                     END AS estado,
-                    CASE
-                        WHEN pc.estado <> 'pagado' AND pc.fecha_programada < CURDATE() THEN c.moratorio
-                        ELSE 0
-                    END AS recargo_moratorio,
-                    (pc.monto_programado + CASE
-                        WHEN pc.estado <> 'pagado' AND pc.fecha_programada < CURDATE() THEN c.moratorio
-                        ELSE 0
-                    END) AS monto_cobro_actual
+                    c.moratorio AS moratorio_base
                 FROM pagos_credito pc
                 INNER JOIN creditos c ON c.idcredito = pc.idcredito
                 WHERE pc.idcredito = ?
@@ -263,7 +259,24 @@ class CreditosRepository
         $stmt = $this->db->prepare($sql);
         $stmt->execute([$idCredito]);
 
-        return $stmt->fetchAll();
+        $pagos = $stmt->fetchAll();
+        $hoy = $this->fechaHoyOperativa();
+
+        foreach ($pagos as &$pago) {
+            $recargoMoratorio = $this->calcularRecargoMoratorio(
+                (string)($pago['tipo'] ?? 'diario'),
+                (float)($pago['moratorio_base'] ?? 0),
+                (string)($pago['fecha_programada'] ?? ''),
+                $hoy,
+                (string)($pago['estado'] ?? 'pendiente')
+            );
+
+            $pago['recargo_moratorio'] = $recargoMoratorio;
+            $pago['monto_cobro_actual'] = round((float)($pago['monto_programado'] ?? 0) + $recargoMoratorio, 2);
+        }
+        unset($pago);
+
+        return $pagos;
     }
 
     /**
@@ -397,7 +410,7 @@ class CreditosRepository
                 throw new Exception('Una o más letras seleccionadas no fueron encontradas');
             }
 
-            $hoy = new DateTime('today');
+            $hoy = $this->fechaHoyOperativa();
             $montoCobro = 0.0;
             $pagosAnticipados = [];
             $abonoCapital = max(0, round($abonoCapital, 2));
@@ -421,8 +434,13 @@ class CreditosRepository
                     $pagosAnticipados[] = (int)$pago['numero_pago'];
                 }
 
-                $esVencido = $fechaProgramada < $hoy;
-                $recargoMoratorio = $esVencido ? (float)($pago['moratorio'] ?? 0) : 0.0;
+                $recargoMoratorio = $this->calcularRecargoMoratorio(
+                    (string)($pago['tipo'] ?? 'diario'),
+                    (float)($pago['moratorio'] ?? 0),
+                    (string)($pago['fecha_programada'] ?? ''),
+                    $hoy,
+                    (string)($pago['estado'] ?? 'pendiente')
+                );
                 $montoBase = (float)$pago['monto_programado'] + $recargoMoratorio;
                 if ($esMensualFlexible) {
                     $montoBase += $abonoCapital;
@@ -444,6 +462,7 @@ class CreditosRepository
                               SET estado = 'pagado', fecha_pago_real = :fecha_pago_real, monto_pagado = :monto_pagado
                               WHERE idpago = :idpago";
             $stmtUpdatePago = $this->db->prepare($sqlUpdatePago);
+            $grupoCobro = $this->generarGrupoCobroId();
             $sqlHistorial = "INSERT INTO historial_pagos (
                                 idpago,
                                 idcredito,
@@ -451,6 +470,7 @@ class CreditosRepository
                                 monto_pagado,
                                 interes_moratorio,
                                 idusuario_cobrador,
+                                grupo_cobro,
                                 metodo_pago,
                                 observaciones
                             ) VALUES (
@@ -460,6 +480,7 @@ class CreditosRepository
                                 :monto_pagado,
                                 :interes_moratorio,
                                 :idusuario_cobrador,
+                                :grupo_cobro,
                                 :metodo_pago,
                                 :observaciones
                             )";
@@ -472,9 +493,13 @@ class CreditosRepository
             $interesMensual = null;
 
             foreach ($pagos as $pago) {
-                $fechaProgramada = new DateTime($pago['fecha_programada']);
-                $esVencido = $fechaProgramada < $hoy;
-                $recargoMoratorio = $esVencido ? (float)($pago['moratorio'] ?? 0) : 0.0;
+                $recargoMoratorio = $this->calcularRecargoMoratorio(
+                    (string)($pago['tipo'] ?? 'diario'),
+                    (float)($pago['moratorio'] ?? 0),
+                    (string)($pago['fecha_programada'] ?? ''),
+                    $hoy,
+                    (string)($pago['estado'] ?? 'pendiente')
+                );
                 $montoPago = (float)$pago['monto_programado'] + $recargoMoratorio;
                 $esAnticipado = (new DateTime($pago['fecha_programada'])) > $hoy;
 
@@ -502,6 +527,7 @@ class CreditosRepository
                     ':monto_pagado' => $montoPago,
                     ':interes_moratorio' => $recargoMoratorio,
                     ':idusuario_cobrador' => $idUsuarioCobrador,
+                    ':grupo_cobro' => $grupoCobro,
                     ':metodo_pago' => $metodoPago,
                     ':observaciones' => $esAnticipado
                         ? 'Cobro anticipado registrado por cobratario'
@@ -600,6 +626,7 @@ class CreditosRepository
                 'pagos_cobrados' => $pagosCobrados,
                 'recibos' => $recibos,
                 'historial_ids' => $historialIds,
+                'grupo_cobro' => $grupoCobro,
                 'cobro_anticipado' => !empty($pagosAnticipados),
             ];
         } catch (Exception $e) {
@@ -630,7 +657,7 @@ class CreditosRepository
      */
     public function obtenerDatosReciboCobroPorPago(int $idPago, int $idCredito): array
     {
-        $sql = "SELECT hp.idhistorial
+        $sql = "SELECT hp.idhistorial, hp.grupo_cobro
                 FROM historial_pagos hp
                 INNER JOIN pagos_credito cr ON hp.idpago = cr.idpago
                 INNER JOIN creditos c ON c.idcredito = cr.idcredito
@@ -647,6 +674,14 @@ class CreditosRepository
         $resultado = $stmt->fetch();
         if (!$resultado) {
             return ['success' => false, 'error' => 'Registro de cobro no encontrado'];
+        }
+
+        $grupoCobro = trim((string)($resultado['grupo_cobro'] ?? ''));
+        if ($grupoCobro !== '') {
+            $idsRelacionados = $this->obtenerIdsHistorialPorGrupoCobro($grupoCobro, $idCredito);
+            if (!empty($idsRelacionados)) {
+                return $this->obtenerDatosReciboCobro($idsRelacionados, $idCredito);
+            }
         }
 
         return $this->obtenerDatosReciboCobro([(int)$resultado['idhistorial']], $idCredito);
@@ -684,6 +719,7 @@ class CreditosRepository
                     p.idpersona,
                     CONCAT(p.ap_paterno, ' ', p.ap_materno, ' ', p.nombres) AS nombre_completo,
                     p.curp AS numero_cedula,
+                    p.email AS cliente_email,
                     p.telefono,
                     CONCAT(p.dom_calle, ' ', p.dom_numero) AS direccion,
                     m.nombre AS ciudad
@@ -750,6 +786,7 @@ class CreditosRepository
                 'cliente' => [
                     'nombre' => $primero['nombre_completo'],
                     'cedula' => $primero['numero_cedula'],
+                    'email' => $primero['cliente_email'] ?? '',
                     'telefono' => $primero['telefono'],
                     'ciudad' => $primero['ciudad'] ?? 'N/A',
                 ],
@@ -762,6 +799,7 @@ class CreditosRepository
                     'interes' => $primero['interes'],
                 ],
                 'pagos' => $pagos,
+                'historial_ids' => array_values(array_map(static fn($pago) => (int)$pago['idhistorial'], $pagos)),
                 'resumen' => [
                     'cantidad_pagos_cobrados' => count($pagos),
                     'total_programado' => round($totalProgramado, 2),
@@ -785,5 +823,211 @@ class CreditosRepository
 
         $metodoNormalizado = strtolower(trim($metodo));
         return $mapa[$metodoNormalizado] ?? ucfirst($metodoNormalizado);
+    }
+
+    private function calcularRecargoMoratorio(string $tipoCredito, float $moratorioUnitario, string $fechaProgramada, DateTime $hoy, string $estadoPago): float
+    {
+        if (strtolower(trim($estadoPago)) === 'pagado') {
+            return 0.0;
+        }
+
+        if ($moratorioUnitario <= 0 || trim($fechaProgramada) === '') {
+            return 0.0;
+        }
+
+        try {
+            $fecha = new DateTime($fechaProgramada);
+            $fecha->setTime(0, 0, 0);
+
+            $hoySinHora = clone $hoy;
+            $hoySinHora->setTime(0, 0, 0);
+
+            if ($fecha >= $hoySinHora) {
+                return 0.0;
+            }
+
+            $periodos = $this->calcularPeriodosVencidos($tipoCredito, $fecha, $hoySinHora);
+            return round($moratorioUnitario * $periodos, 2);
+        } catch (Throwable $e) {
+            return 0.0;
+        }
+    }
+
+    private function calcularPeriodosVencidos(string $tipoCredito, DateTime $fechaProgramada, DateTime $hoy): int
+    {
+        $tipo = strtolower(trim($tipoCredito));
+        $diasDiferencia = (int)$fechaProgramada->diff($hoy)->days;
+
+        switch ($tipo) {
+            case 'semanal':
+                return intdiv($diasDiferencia, 7);
+            case 'mensual':
+                $anios = (int)$hoy->format('Y') - (int)$fechaProgramada->format('Y');
+                $meses = (int)$hoy->format('n') - (int)$fechaProgramada->format('n');
+                $totalMeses = ($anios * 12) + $meses;
+
+                if ((int)$hoy->format('j') < (int)$fechaProgramada->format('j')) {
+                    $totalMeses -= 1;
+                }
+
+                return max(0, $totalMeses);
+            case 'diario':
+            default:
+                return max(0, $diasDiferencia);
+        }
+    }
+
+    private function fechaHoyOperativa(): DateTime
+    {
+        try {
+            $timezone = (string)(getenv('APP_TIMEZONE') ?: 'America/Mexico_City');
+            $hoy = new DateTime('now', new DateTimeZone($timezone));
+            $hoy->setTime(0, 0, 0);
+            return $hoy;
+        } catch (Throwable $e) {
+            return new DateTime('today');
+        }
+    }
+
+    private function obtenerIdsHistorialPorGrupoCobro(string $grupoCobro, int $idCredito): array
+    {
+        $sql = "SELECT hp.idhistorial
+                FROM historial_pagos hp
+                WHERE hp.grupo_cobro = :grupo_cobro AND hp.idcredito = :idcredito
+                ORDER BY hp.idhistorial ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':grupo_cobro' => $grupoCobro,
+            ':idcredito' => $idCredito,
+        ]);
+
+        $rows = $stmt->fetchAll();
+        return array_values(array_map(static fn($row) => (int)$row['idhistorial'], $rows));
+    }
+
+    private function generarGrupoCobroId(): string
+    {
+        try {
+            return 'GC' . date('YmdHis') . strtoupper(bin2hex(random_bytes(4)));
+        } catch (Throwable $e) {
+            return 'GC' . str_replace('.', '', (string)microtime(true));
+        }
+    }
+
+    private function asegurarColumnaGrupoCobro(): void
+    {
+        try {
+            $sqlExiste = "SELECT COUNT(*) AS total
+                          FROM INFORMATION_SCHEMA.COLUMNS
+                          WHERE TABLE_SCHEMA = DATABASE()
+                            AND TABLE_NAME = 'historial_pagos'
+                            AND COLUMN_NAME = 'grupo_cobro'";
+            $stmtExiste = $this->db->query($sqlExiste);
+            $existe = (int)($stmtExiste->fetch()['total'] ?? 0) > 0;
+
+            if (!$existe) {
+                $this->db->exec("ALTER TABLE historial_pagos
+                    ADD COLUMN grupo_cobro VARCHAR(40) NULL AFTER idusuario_cobrador,
+                    ADD INDEX idx_historial_grupo_cobro (grupo_cobro)");
+            }
+        } catch (Throwable $e) {
+            // No bloquear el flujo principal si la migración automática no se puede aplicar.
+        }
+    }
+
+    private function asegurarTriggerSaldoCredito(): void
+    {
+        try {
+            $sqlTrigger = "SELECT ACTION_STATEMENT
+                                                     FROM INFORMATION_SCHEMA.TRIGGERS
+                                                     WHERE TRIGGER_SCHEMA = DATABASE()
+                                                         AND TRIGGER_NAME = 'actualizar_saldo_credito'
+                                                     LIMIT 1";
+            $stmtTrigger = $this->db->query($sqlTrigger);
+            $triggerActual = (string)(($stmtTrigger ? $stmtTrigger->fetch()['ACTION_STATEMENT'] : '') ?? '');
+
+            if (
+                $triggerActual !== ''
+                && strpos($triggerActual, 'interes_moratorio') !== false
+                && strpos($triggerActual, 'v_descuento_saldo') !== false
+            ) {
+                return;
+            }
+
+            $this->db->exec("DROP TRIGGER IF EXISTS actualizar_saldo_credito");
+
+            $sql = "
+                CREATE TRIGGER actualizar_saldo_credito
+                AFTER INSERT ON historial_pagos
+                FOR EACH ROW
+                BEGIN
+                    DECLARE v_tipo VARCHAR(20) DEFAULT 'diario';
+                    DECLARE v_monto_programado DECIMAL(10,2) DEFAULT 0.00;
+                    DECLARE v_moratorio DECIMAL(10,2) DEFAULT 0.00;
+                    DECLARE v_descuento_saldo DECIMAL(10,2) DEFAULT 0.00;
+
+                    SELECT c.tipo, COALESCE(pc.monto_programado, 0)
+                    INTO v_tipo, v_monto_programado
+                    FROM creditos c
+                    LEFT JOIN pagos_credito pc ON pc.idpago = NEW.idpago
+                    WHERE c.idcredito = NEW.idcredito
+                    LIMIT 1;
+
+                    SET v_moratorio = COALESCE(NEW.interes_moratorio, 0);
+
+                    IF v_tipo = 'mensual' THEN
+                        SET v_descuento_saldo = GREATEST(NEW.monto_pagado - v_monto_programado - v_moratorio, 0);
+                    ELSE
+                        SET v_descuento_saldo = GREATEST(NEW.monto_pagado - v_moratorio, 0);
+                    END IF;
+
+                    UPDATE creditos
+                    SET
+                        total_pagado = total_pagado + NEW.monto_pagado,
+                        saldo_pendiente = GREATEST(saldo_pendiente - v_descuento_saldo, 0)
+                    WHERE idcredito = NEW.idcredito;
+                END
+            ";
+
+            $this->db->exec($sql);
+        } catch (Throwable $e) {
+            // No bloquear el flujo principal si no hay permisos para crear triggers.
+        }
+    }
+
+    private function normalizarSaldosCreditos(): void
+    {
+        try {
+            $sqlNoMensual = "
+                UPDATE creditos c
+                LEFT JOIN (
+                    SELECT
+                        hp.idcredito,
+                        SUM(GREATEST(hp.monto_pagado - COALESCE(hp.interes_moratorio, 0), 0)) AS base_pagada
+                    FROM historial_pagos hp
+                    GROUP BY hp.idcredito
+                ) pagos ON pagos.idcredito = c.idcredito
+                SET
+                    c.saldo_pendiente = GREATEST(c.total_pagos - COALESCE(pagos.base_pagada, 0), 0),
+                    c.estado = CASE
+                        WHEN GREATEST(c.total_pagos - COALESCE(pagos.base_pagada, 0), 0) <= 0 THEN 'completado'
+                        ELSE c.estado
+                    END
+                                WHERE c.tipo <> 'mensual'
+                                    AND c.saldo_pendiente < 0
+            ";
+            $this->db->exec($sqlNoMensual);
+
+            $sqlMensual = "
+                UPDATE creditos
+                SET saldo_pendiente = GREATEST(saldo_pendiente, 0)
+                                WHERE tipo = 'mensual'
+                                    AND saldo_pendiente < 0
+            ";
+            $this->db->exec($sqlMensual);
+        } catch (Throwable $e) {
+            // No bloquear el flujo principal si la normalización no se puede aplicar.
+        }
     }
 }

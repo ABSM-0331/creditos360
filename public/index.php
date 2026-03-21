@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/../vendor/autoload.php';
 $lifetime = 60 * 60 * 24 * 7;
 session_set_cookie_params([
     'lifetime' => $lifetime,
-    'path' => '/proyecto-residencia/public',
+    'path' => '/',
     'secure' => false,
     'httponly' => true,
 ]);
@@ -75,6 +76,12 @@ switch ($uri) {
     case 'usuarios':
         (new UsuariosController())->index();
         break;
+    case 'empresa':
+        (new EmpresaController())->index();
+        break;
+    case 'empresa/guardar':
+        (new EmpresaController())->guardar();
+        break;
     case 'nuevo-usuario':
         (new UsuariosController())->vistaCrear();
         break;
@@ -101,6 +108,12 @@ switch ($uri) {
         break;
     case 'creditos/recibo':
         (new CreditosController())->recibo();
+        break;
+    case 'creditos/ver-ticket':
+        (new CreditosController())->verTicket();
+        break;
+    case 'creditos/enviar-ticket':
+        (new CreditosController())->enviarTicket();
         break;
     case 'api/estados':
         (new UbicacionesController())->obtenerEstados();
