@@ -3,10 +3,12 @@
 class CreditosRepository
 {
     private PDO $db;
+    private ?array $tiposCreditoCache = null;
 
     public function __construct()
     {
         $this->db = DBC::get();
+        $this->asegurarCatalogoTiposCredito();
         $this->asegurarColumnaGrupoCobro();
         $this->asegurarTriggerSaldoCredito();
         $this->normalizarSaldosCreditos();
@@ -21,7 +23,7 @@ class CreditosRepository
             // Iniciar transacción
             $this->db->beginTransaction();
 
-            $esMensualFlexible = ($datos['tipo'] ?? '') === 'mensual';
+            $esMensualFlexible = $this->esTipoFlexible((string)($datos['tipo'] ?? ''));
 
             // 1. Calcular datos del crédito
             $montoInteres = $datos['monto'] * ($datos['interes'] / 100);
@@ -167,16 +169,17 @@ class CreditosRepository
      */
     private function obtenerIntervalo($tipo)
     {
-        switch ($tipo) {
-            case 'diario':
-                return new DateInterval('P1D');
-            case 'semanal':
-                return new DateInterval('P7D');
-            case 'mensual':
-                return new DateInterval('P1M');
-            default:
-                return new DateInterval('P1D');
+        $tipoData = $this->obtenerTipoCreditoPorClave((string)$tipo);
+        if ($tipoData && (int)($tipoData['es_flexible'] ?? 0) === 1) {
+            return new DateInterval('P1M');
         }
+
+        $dias = (int)($tipoData['dias_intervalo'] ?? 1);
+        if ($dias <= 0) {
+            $dias = 1;
+        }
+
+        return new DateInterval('P' . $dias . 'D');
     }
 
     /**
@@ -415,7 +418,7 @@ class CreditosRepository
             $pagosAnticipados = [];
             $abonoCapital = max(0, round($abonoCapital, 2));
 
-            $esMensualFlexible = count($pagos) === 1 && (($pagos[0]['tipo'] ?? '') === 'mensual');
+            $esMensualFlexible = count($pagos) === 1 && $this->esTipoFlexible((string)($pagos[0]['tipo'] ?? ''));
             if ($esMensualFlexible && count($idPagos) > 1) {
                 throw new Exception('Para crédito mensual flexible solo puedes cobrar una letra por operación');
             }
@@ -504,7 +507,7 @@ class CreditosRepository
                 $esAnticipado = (new DateTime($pago['fecha_programada'])) > $hoy;
 
                 $abonoCapitalPago = 0.0;
-                if (($pago['tipo'] ?? '') === 'mensual') {
+                if ($this->esTipoFlexible((string)($pago['tipo'] ?? ''))) {
                     $abonoCapitalPago = $abonoCapital;
                     $montoPago += $abonoCapitalPago;
 
@@ -531,7 +534,7 @@ class CreditosRepository
                     ':metodo_pago' => $metodoPago,
                     ':observaciones' => $esAnticipado
                         ? 'Cobro anticipado registrado por cobratario'
-                        : (($pago['tipo'] ?? '') === 'mensual' && $abonoCapitalPago > 0
+                        : ($this->esTipoFlexible((string)($pago['tipo'] ?? '')) && $abonoCapitalPago > 0
                             ? 'Cobro mensual con abono a capital'
                             : 'Cobro registrado por cobratario'),
                 ]);
@@ -708,6 +711,7 @@ class CreditosRepository
                     c.idcredito,
                     c.monto,
                     c.saldo_pendiente,
+                    c.total_pagos,
                     c.tipo,
                     c.interes,
                     c.cantidad_pagos,
@@ -715,6 +719,7 @@ class CreditosRepository
                     cr.numero_pago,
                     cr.monto_programado,
                     cr.interes_programado,
+                    cr.saldo_vivo,
                     cr.fecha_programada,
                     p.idpersona,
                     CONCAT(p.ap_paterno, ' ', p.ap_materno, ' ', p.nombres) AS nombre_completo,
@@ -768,9 +773,35 @@ class CreditosRepository
                 'monto_pagado' => $montoPagado,
                 'fecha_programada' => $resultado['fecha_programada'],
                 'interes_programado' => (float)$resultado['interes_programado'],
+                'saldo_vivo' => (float)$resultado['saldo_vivo'],
                 'fue_vencida' => $fueVencida,
                 'recargo_moratorio' => round($recargoMoratorio, 2),
             ];
+        }
+
+        $saldoRestanteMomento = 0.0;
+        $corteHistorialId = max(array_map(static fn($p) => (int)($p['idhistorial'] ?? 0), $pagos));
+        $esTipoFlexible = $this->esTipoFlexible((string)($primero['tipo'] ?? ''));
+
+        if ($esTipoFlexible) {
+            $ultimoPago = end($pagos) ?: [];
+            $saldoVivoAntes = (float)($ultimoPago['saldo_vivo'] ?? 0);
+            $montoPagadoUltimo = (float)($ultimoPago['monto_pagado'] ?? 0);
+            $montoProgramadoUltimo = (float)($ultimoPago['monto_programado'] ?? 0);
+            $moratorioUltimo = (float)($ultimoPago['recargo_moratorio'] ?? 0);
+            $abonoCapitalUltimo = max(0, $montoPagadoUltimo - $montoProgramadoUltimo - $moratorioUltimo);
+            $saldoRestanteMomento = max(0, round($saldoVivoAntes - $abonoCapitalUltimo, 2));
+        } else {
+            $totalOriginal = (float)($primero['total_pagos'] ?? 0);
+            // Para saldo historico de creditos no flexibles, no descontar moratorio del saldo del credito.
+            // El moratorio es un recargo de cobranza, no amortizacion del total programado del credito.
+            $stmtAcumulado = $this->db->prepare("SELECT COALESCE(SUM(monto_pagado - COALESCE(interes_moratorio, 0)), 0) AS total_amortizado_hasta_corte FROM historial_pagos WHERE idcredito = :idcredito AND idhistorial <= :idhistorial_corte");
+            $stmtAcumulado->execute([
+                ':idcredito' => (int)$primero['idcredito'],
+                ':idhistorial_corte' => $corteHistorialId,
+            ]);
+            $totalAmortizadoHastaCorte = (float)($stmtAcumulado->fetch()['total_amortizado_hasta_corte'] ?? 0);
+            $saldoRestanteMomento = max(0, round($totalOriginal - $totalAmortizadoHastaCorte, 2));
         }
 
         $numeroBase = count($resultados) > 1
@@ -794,6 +825,7 @@ class CreditosRepository
                     'idcredito' => $primero['idcredito'],
                     'monto_original' => $primero['monto'],
                     'saldo_pendiente' => (float)$primero['saldo_pendiente'],
+                    'saldo_pendiente_momento' => $saldoRestanteMomento,
                     'tipo' => ucfirst($primero['tipo']),
                     'pagos_totales' => $primero['cantidad_pagos'],
                     'interes' => $primero['interes'],
@@ -855,26 +887,185 @@ class CreditosRepository
 
     private function calcularPeriodosVencidos(string $tipoCredito, DateTime $fechaProgramada, DateTime $hoy): int
     {
-        $tipo = strtolower(trim($tipoCredito));
         $diasDiferencia = (int)$fechaProgramada->diff($hoy)->days;
 
-        switch ($tipo) {
-            case 'semanal':
-                return intdiv($diasDiferencia, 7);
-            case 'mensual':
-                $anios = (int)$hoy->format('Y') - (int)$fechaProgramada->format('Y');
-                $meses = (int)$hoy->format('n') - (int)$fechaProgramada->format('n');
-                $totalMeses = ($anios * 12) + $meses;
+        if ($this->esTipoFlexible($tipoCredito)) {
+            $anios = (int)$hoy->format('Y') - (int)$fechaProgramada->format('Y');
+            $meses = (int)$hoy->format('n') - (int)$fechaProgramada->format('n');
+            $totalMeses = ($anios * 12) + $meses;
 
-                if ((int)$hoy->format('j') < (int)$fechaProgramada->format('j')) {
-                    $totalMeses -= 1;
-                }
+            if ((int)$hoy->format('j') < (int)$fechaProgramada->format('j')) {
+                $totalMeses -= 1;
+            }
 
-                return max(0, $totalMeses);
-            case 'diario':
-            default:
-                return max(0, $diasDiferencia);
+            return max(0, $totalMeses);
         }
+
+        $tipoData = $this->obtenerTipoCreditoPorClave($tipoCredito);
+        $diasIntervalo = (int)($tipoData['dias_intervalo'] ?? 1);
+        if ($diasIntervalo <= 0) {
+            $diasIntervalo = 1;
+        }
+
+        return max(0, intdiv($diasDiferencia, $diasIntervalo));
+    }
+
+    public function obtenerTiposCredito(bool $soloActivos = true): array
+    {
+        $sql = "SELECT idtipo, tipo, cantidad_pagos, interes_default, dias_intervalo, es_flexible, activo
+                FROM tipos_credito";
+
+        $params = [];
+        if ($soloActivos) {
+            $sql .= " WHERE activo = 1";
+        }
+
+        $sql .= " ORDER BY tipo ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function obtenerTipoCreditoPorClave(string $tipo): ?array
+    {
+        $tipo = strtolower(trim($tipo));
+        if ($tipo === '') {
+            return null;
+        }
+
+        if ($this->tiposCreditoCache === null) {
+            $this->tiposCreditoCache = [];
+            $tipos = $this->obtenerTiposCredito(false);
+            foreach ($tipos as $item) {
+                $clave = strtolower((string)($item['tipo'] ?? ''));
+                if ($clave !== '') {
+                    $this->tiposCreditoCache[$clave] = $item;
+                }
+            }
+        }
+
+        return $this->tiposCreditoCache[$tipo] ?? null;
+    }
+
+    public function obtenerTipoCreditoPorId(int $idTipo): ?array
+    {
+        $stmt = $this->db->prepare("SELECT idtipo, tipo, cantidad_pagos, interes_default, dias_intervalo, es_flexible, activo FROM tipos_credito WHERE idtipo = :idtipo LIMIT 1");
+        $stmt->execute([':idtipo' => $idTipo]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    public function crearTipoCredito(array $datos): int
+    {
+        $stmt = $this->db->prepare("INSERT INTO tipos_credito (tipo, cantidad_pagos, interes_default, dias_intervalo, es_flexible, activo)
+                                   VALUES (:tipo, :cantidad_pagos, :interes_default, :dias_intervalo, 0, 1)");
+        $stmt->execute([
+            ':tipo' => strtolower(trim((string)$datos['tipo'])),
+            ':cantidad_pagos' => (int)$datos['cantidad_pagos'],
+            ':interes_default' => (float)$datos['interes_default'],
+            ':dias_intervalo' => max(1, (int)($datos['dias_intervalo'] ?? 1)),
+        ]);
+
+        $this->tiposCreditoCache = null;
+        return (int)$this->db->lastInsertId();
+    }
+
+    public function actualizarTipoCredito(int $idTipo, array $datos): bool
+    {
+        $tipoActual = $this->obtenerTipoCreditoPorId($idTipo);
+        if (!$tipoActual) {
+            throw new Exception('Tipo de crédito no encontrado');
+        }
+
+        $tipoNuevo = strtolower(trim((string)$datos['tipo']));
+        $esFlexible = (int)($tipoActual['es_flexible'] ?? 0) === 1;
+
+        if ($esFlexible && $tipoNuevo !== (string)$tipoActual['tipo']) {
+            throw new Exception('No puedes cambiar la clave de un tipo flexible');
+        }
+
+        $stmt = $this->db->prepare("UPDATE tipos_credito
+                                    SET tipo = :tipo,
+                                        cantidad_pagos = :cantidad_pagos,
+                                        interes_default = :interes_default,
+                                        dias_intervalo = :dias_intervalo,
+                                        activo = :activo
+                                    WHERE idtipo = :idtipo");
+
+        $ok = $stmt->execute([
+            ':tipo' => $tipoNuevo,
+            ':cantidad_pagos' => (int)$datos['cantidad_pagos'],
+            ':interes_default' => (float)$datos['interes_default'],
+            ':dias_intervalo' => $esFlexible ? 30 : max(1, (int)($datos['dias_intervalo'] ?? 1)),
+            ':activo' => isset($datos['activo']) ? (int)$datos['activo'] : 1,
+            ':idtipo' => $idTipo,
+        ]);
+
+        if ($ok && (string)$tipoActual['tipo'] !== $tipoNuevo) {
+            $stmtCreditos = $this->db->prepare("UPDATE creditos SET tipo = :tipo_nuevo WHERE tipo = :tipo_actual");
+            $stmtCreditos->execute([
+                ':tipo_nuevo' => $tipoNuevo,
+                ':tipo_actual' => (string)$tipoActual['tipo'],
+            ]);
+        }
+
+        $this->tiposCreditoCache = null;
+        return $ok;
+    }
+
+    public function eliminarTipoCredito(int $idTipo): bool
+    {
+        $tipo = $this->obtenerTipoCreditoPorId($idTipo);
+        if (!$tipo) {
+            throw new Exception('Tipo de crédito no encontrado');
+        }
+
+        if ((int)($tipo['es_flexible'] ?? 0) === 1) {
+            throw new Exception('No puedes eliminar un tipo flexible del sistema');
+        }
+
+        $stmtUso = $this->db->prepare("SELECT COUNT(*) AS total FROM creditos WHERE tipo = :tipo");
+        $stmtUso->execute([':tipo' => (string)$tipo['tipo']]);
+        $total = (int)($stmtUso->fetch()['total'] ?? 0);
+        if ($total > 0) {
+            throw new Exception('No puedes eliminar este tipo porque ya está asignado a créditos existentes');
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM tipos_credito WHERE idtipo = :idtipo");
+        $ok = $stmt->execute([':idtipo' => $idTipo]);
+        $this->tiposCreditoCache = null;
+        return $ok;
+    }
+
+    public function obtenerConfiguracionesTiposCredito(): array
+    {
+        $tipos = $this->obtenerTiposCredito(true);
+        $configuraciones = [];
+
+        foreach ($tipos as $tipo) {
+            $clave = strtolower((string)$tipo['tipo']);
+            $esFlexible = (int)($tipo['es_flexible'] ?? 0) === 1;
+            $dias = max(1, (int)($tipo['dias_intervalo'] ?? 1));
+
+            $configuraciones[$clave] = [
+                'pagos' => (int)$tipo['cantidad_pagos'],
+                'interes' => (float)$tipo['interes_default'],
+                'moratorio' => 35,
+                'modo' => $esFlexible ? 'flexible' : 'fijo',
+                'intervalo' => $esFlexible ? 'P1M' : ('P' . $dias . 'D'),
+                'dias_intervalo' => $dias,
+                'es_flexible' => $esFlexible,
+            ];
+        }
+
+        return $configuraciones;
+    }
+
+    private function esTipoFlexible(string $tipo): bool
+    {
+        $tipoData = $this->obtenerTipoCreditoPorClave($tipo);
+        return (int)($tipoData['es_flexible'] ?? 0) === 1;
     }
 
     private function fechaHoyOperativa(): DateTime
@@ -993,6 +1184,112 @@ class CreditosRepository
             $this->db->exec($sql);
         } catch (Throwable $e) {
             // No bloquear el flujo principal si no hay permisos para crear triggers.
+        }
+    }
+
+    private function asegurarCatalogoTiposCredito(): void
+    {
+        try {
+            $this->db->exec("CREATE TABLE IF NOT EXISTS tipos_credito (
+                idtipo INT(11) NOT NULL AUTO_INCREMENT,
+                tipo VARCHAR(50) NOT NULL,
+                cantidad_pagos INT(11) NOT NULL,
+                interes_default DECIMAL(5,2) NOT NULL,
+                dias_intervalo INT(11) NOT NULL DEFAULT 1,
+                es_flexible TINYINT(1) NOT NULL DEFAULT 0,
+                activo TINYINT(1) NOT NULL DEFAULT 1,
+                created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (idtipo),
+                UNIQUE KEY uk_tipo_credito_tipo (tipo)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+
+            $sqlExisteCol = "SELECT COUNT(*) AS total
+                            FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = DATABASE()
+                              AND TABLE_NAME = 'tipos_credito'
+                              AND COLUMN_NAME = 'es_flexible'";
+            $stmtCol = $this->db->query($sqlExisteCol);
+            $existeCol = (int)($stmtCol->fetch()['total'] ?? 0) > 0;
+            if (!$existeCol) {
+                $this->db->exec("ALTER TABLE tipos_credito ADD COLUMN es_flexible TINYINT(1) NOT NULL DEFAULT 0 AFTER dias_intervalo");
+            }
+
+            $stmtCount = $this->db->query("SELECT COUNT(*) AS total FROM tipos_credito");
+            $total = (int)($stmtCount->fetch()['total'] ?? 0);
+
+            if ($total === 0) {
+                $stmtSeed = $this->db->prepare("INSERT INTO tipos_credito (tipo, cantidad_pagos, interes_default, dias_intervalo, es_flexible, activo)
+                                                VALUES (:tipo, :cantidad_pagos, :interes_default, :dias_intervalo, :es_flexible, 1)");
+
+                $semillas = [
+                    ['tipo' => 'diario', 'cantidad_pagos' => 35, 'interes_default' => 22.5, 'dias_intervalo' => 1, 'es_flexible' => 0],
+                    ['tipo' => 'semanal', 'cantidad_pagos' => 12, 'interes_default' => 50, 'dias_intervalo' => 7, 'es_flexible' => 0],
+                    ['tipo' => 'quincenal', 'cantidad_pagos' => 6, 'interes_default' => 30, 'dias_intervalo' => 15, 'es_flexible' => 0],
+                    ['tipo' => 'mensual', 'cantidad_pagos' => 3, 'interes_default' => 50, 'dias_intervalo' => 30, 'es_flexible' => 1],
+                ];
+
+                foreach ($semillas as $seed) {
+                    $stmtSeed->execute([
+                        ':tipo' => $seed['tipo'],
+                        ':cantidad_pagos' => $seed['cantidad_pagos'],
+                        ':interes_default' => $seed['interes_default'],
+                        ':dias_intervalo' => $seed['dias_intervalo'],
+                        ':es_flexible' => $seed['es_flexible'],
+                    ]);
+                }
+            } else {
+                $this->asegurarTipoCreditoBase('diario', 35, 22.5, 1, false);
+                $this->asegurarTipoCreditoBase('semanal', 12, 50, 7, false);
+                $this->asegurarTipoCreditoBase('quincenal', 6, 30, 15, false);
+                $this->asegurarTipoCreditoBase('mensual', 3, 50, 30, true);
+            }
+
+            $sqlTipoColumna = "SELECT DATA_TYPE
+                               FROM INFORMATION_SCHEMA.COLUMNS
+                               WHERE TABLE_SCHEMA = DATABASE()
+                                 AND TABLE_NAME = 'creditos'
+                                 AND COLUMN_NAME = 'tipo'
+                               LIMIT 1";
+            $stmtTipo = $this->db->query($sqlTipoColumna);
+            $dataType = strtolower((string)(($stmtTipo ? $stmtTipo->fetch()['DATA_TYPE'] : '') ?? ''));
+            if ($dataType === 'enum') {
+                $this->db->exec("ALTER TABLE creditos MODIFY tipo VARCHAR(50) NOT NULL");
+            }
+        } catch (Throwable $e) {
+            // No bloquear el flujo principal si la migración automática no se puede aplicar.
+        }
+    }
+
+    private function asegurarTipoCreditoBase(string $tipo, int $cantidadPagos, float $interes, int $diasIntervalo, bool $esFlexible): void
+    {
+        $stmt = $this->db->prepare("SELECT idtipo FROM tipos_credito WHERE tipo = :tipo LIMIT 1");
+        $stmt->execute([':tipo' => $tipo]);
+        $existe = $stmt->fetch();
+
+        if (!$existe) {
+            $stmtInsert = $this->db->prepare("INSERT INTO tipos_credito (tipo, cantidad_pagos, interes_default, dias_intervalo, es_flexible, activo)
+                                             VALUES (:tipo, :cantidad_pagos, :interes_default, :dias_intervalo, :es_flexible, 1)");
+            $stmtInsert->execute([
+                ':tipo' => $tipo,
+                ':cantidad_pagos' => $cantidadPagos,
+                ':interes_default' => $interes,
+                ':dias_intervalo' => $diasIntervalo,
+                ':es_flexible' => $esFlexible ? 1 : 0,
+            ]);
+            return;
+        }
+
+        if ($esFlexible) {
+            $stmtUpdate = $this->db->prepare("UPDATE tipos_credito
+                                              SET es_flexible = 1,
+                                                  dias_intervalo = :dias_intervalo,
+                                                  activo = 1
+                                              WHERE tipo = :tipo");
+            $stmtUpdate->execute([
+                ':tipo' => $tipo,
+                ':dias_intervalo' => $diasIntervalo,
+            ]);
         }
     }
 

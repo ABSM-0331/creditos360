@@ -1,11 +1,14 @@
 <?php
 $clienteSeleccionado = $_POST['idpersona'] ?? null;
 $clienteSeleccionadoNombre = $_POST['cliente_nombre'] ?? null;
-$tipo = $_POST['tipo'] ?? 'diario';
 $clientes = $clientes ?? [];
 $creditos = $creditos ?? [];
 $cobratarios = $cobratarios ?? [];
 $configuraciones = $configuraciones ?? [];
+$tiposCredito = $tiposCredito ?? [];
+
+$tiposDisponibles = array_keys($configuraciones);
+$tipo = $_POST['tipo'] ?? (!empty($tiposDisponibles) ? $tiposDisponibles[0] : 'diario');
 
 // Obtener configuración según el tipo
 $config = $configuraciones[$tipo] ?? [];
@@ -17,6 +20,14 @@ $moratorio   = $_POST['moratorio'] ?? ($config['moratorio'] ?? 35);
 $fechaInicio = $_POST['fecha_inicio'] ?? date('Y-m-d');
 
 $simular = isset($_POST['simular']);
+
+if (!function_exists('formatearTipoCreditoTexto')) {
+    function formatearTipoCreditoTexto(string $tipoCredito): string
+    {
+        $limpio = str_replace(['_', '-'], ' ', strtolower(trim($tipoCredito)));
+        return ucwords($limpio);
+    }
+}
 ?>
 
 <section id="creditos" class="content-section">
@@ -29,6 +40,66 @@ $simular = isset($_POST['simular']);
             </svg>
             Simular nuevo crédito
         </button>
+    </div>
+
+    <div id="tipos-credito" style="margin-bottom: 30px;">
+        <div style="background: var(--bg-secondary); padding: 18px; border-radius: 8px; margin-bottom: 15px;">
+            <h3 style="margin: 0 0 15px 0; color: var(--text-primary); font-size: 16px;">Catálogo de Tipos de Crédito</h3>
+
+            <form method="POST" action="/proyecto-residencia/public/creditos/tipos/guardar" class="tipos-credito-create-form">
+                <input type="text" name="tipo" placeholder="Tipo (ej. quincenal)" required>
+                <input type="number" name="cantidad_pagos" placeholder="Pagos" min="1" required>
+                <input type="number" name="interes_default" placeholder="Interés por defecto %" min="0" step="0.01" required>
+                <input type="number" name="dias_intervalo" placeholder="Intervalo en días" min="1" value="1" required>
+                <button type="submit" class="btn-primary">Agregar tipo</button>
+            </form>
+
+            <?php if (empty($tiposCredito)): ?>
+                <div style="text-align: center; padding: 14px; color: var(--text-muted); background: var(--bg-tertiary); border-radius: 8px;">
+                    No hay tipos de crédito registrados.
+                </div>
+            <?php else: ?>
+                <div class="tipos-credito-lista">
+                    <div class="tipos-credito-encabezado">
+                        <span>Tipo</span>
+                        <span>Pagos</span>
+                        <span>Interés %</span>
+                        <span>Cada (días)</span>
+                        <span>Activo</span>
+                        <span>Acciones</span>
+                    </div>
+
+                    <?php foreach ($tiposCredito as $itemTipo): ?>
+                        <form method="POST" action="/proyecto-residencia/public/creditos/tipos/actualizar" class="tipos-credito-row-form">
+                            <input type="hidden" name="idtipo" value="<?= (int)$itemTipo['idtipo'] ?>">
+
+                            <div>
+                                <input type="text" name="tipo" value="<?= htmlspecialchars($itemTipo['tipo']) ?>" <?= ((int)($itemTipo['es_flexible'] ?? 0) === 1 ? 'readonly' : '') ?> required>
+                            </div>
+                            <div>
+                                <input type="number" name="cantidad_pagos" min="1" value="<?= (int)$itemTipo['cantidad_pagos'] ?>" required>
+                            </div>
+                            <div>
+                                <input type="number" name="interes_default" min="0" step="0.01" value="<?= htmlspecialchars($itemTipo['interes_default']) ?>" required>
+                            </div>
+                            <div>
+                                <input type="number" name="dias_intervalo" min="1" value="<?= (int)$itemTipo['dias_intervalo'] ?>" <?= ((int)($itemTipo['es_flexible'] ?? 0) === 1 ? 'readonly' : '') ?> required>
+                            </div>
+                            <div>
+                                <label class="tipo-activo-label">
+                                    <input type="checkbox" name="activo" value="1" <?= ((int)$itemTipo['activo'] === 1 ? 'checked' : '') ?>>
+                                    Activo
+                                </label>
+                            </div>
+                            <div class="tipo-acciones">
+                                <button type="submit" class="btn-tipo-guardar">Guardar</button>
+                                <button type="submit" formaction="/proyecto-residencia/public/creditos/tipos/eliminar" formmethod="POST" onclick="return confirm('¿Eliminar este tipo de crédito?');" class="btn-tipo-eliminar" <?= ((int)($itemTipo['es_flexible'] ?? 0) === 1 ? 'disabled' : '') ?>>Eliminar</button>
+                            </div>
+                        </form>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Tabla de créditos activos -->
@@ -227,9 +298,13 @@ $simular = isset($_POST['simular']);
                     <div class="form-field">
                         <label for="tipo">Tipo <span class="required">*</span></label>
                         <select id="tipo" name="tipo" required class="form-select" onchange="actualizarConfig()">
-                            <option value="diario" <?= $tipo == 'diario' ? 'selected' : '' ?>>Diario</option>
-                            <option value="semanal" <?= $tipo == 'semanal' ? 'selected' : '' ?>>Semanal</option>
-                            <option value="mensual" <?= $tipo == 'mensual' ? 'selected' : '' ?>>Mensual</option>
+                            <?php if (empty($tiposDisponibles)): ?>
+                                <option value="diario" selected>Diario</option>
+                            <?php else: ?>
+                                <?php foreach ($tiposDisponibles as $tipoItem): ?>
+                                    <option value="<?= htmlspecialchars($tipoItem) ?>" <?= $tipo == $tipoItem ? 'selected' : '' ?>><?= htmlspecialchars(formatearTipoCreditoTexto($tipoItem)) ?></option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="form-field">
@@ -268,21 +343,9 @@ $simular = isset($_POST['simular']);
         <div id="resultadoSimulacion" style="margin-top: 40px;<?= $simular ? '' : ' display: none;' ?>">
             <?php if ($simular && $clienteSeleccionado): ?>
                 <?php
-                switch ($tipo) {
-                    case 'diario':
-                        $labelPago = 'Pago diario';
-                        break;
-                    case 'semanal':
-                        $labelPago = 'Pago semanal';
-                        break;
-                    case 'mensual':
-                        $labelPago = 'Pago mensual';
-                        break;
-                    default:
-                        $labelPago = 'Pago';
-                }
+                $labelPago = 'Pago ' . strtolower(formatearTipoCreditoTexto($tipo));
 
-                if ($config['modo'] == 'fijo') {
+                if (($config['modo'] ?? 'fijo') == 'fijo') {
 
                     $montoInteres = round($monto * ($interes / 100), 2);
                     $totalPagar  = round($monto + $montoInteres, 2);
@@ -624,6 +687,13 @@ $simular = isset($_POST['simular']);
         ventana.print();
     }
 
+    function formatearTipoCreditoTextoJS(tipo) {
+        return String(tipo || '')
+            .toLowerCase()
+            .replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, (letra) => letra.toUpperCase());
+    }
+
     function actualizarConfig() {
         const tipo = document.getElementById('tipo').value;
         if (configuracionesData[tipo]) {
@@ -634,13 +704,16 @@ $simular = isset($_POST['simular']);
             // Al cambiar el tipo, se cargan sus valores por defecto.
             pagosInput.value = configuracionesData[tipo].pagos;
             interesInput.value = configuracionesData[tipo].interes;
-            moratorioInput.value = configuracionesData[tipo].moratorio;
+            if (configuracionesData[tipo].moratorio !== undefined) {
+                moratorioInput.value = configuracionesData[tipo].moratorio;
+            }
         }
 
         // Mostrar/ocultar campo de fecha según el tipo
         const divFecha = document.getElementById('divFechaInicio');
         if (divFecha) {
-            divFecha.style.display = tipo === 'mensual' ? 'none' : 'block';
+            const esFlexible = Boolean(configuracionesData[tipo]?.es_flexible);
+            divFecha.style.display = esFlexible ? 'none' : 'block';
         }
     }
 
@@ -1051,18 +1124,7 @@ $simular = isset($_POST['simular']);
         const interes = totalPagar - montoOriginal;
 
         // Determinar el label del pago según el tipo
-        let labelPago = 'Pago';
-        switch (credito.tipo.toLowerCase()) {
-            case 'diario':
-                labelPago = 'Pago diario';
-                break;
-            case 'semanal':
-                labelPago = 'Pago semanal';
-                break;
-            case 'mensual':
-                labelPago = 'Pago mensual';
-                break;
-        }
+        const labelPago = `Pago ${formatearTipoCreditoTextoJS(credito.tipo).toLowerCase()}`;
 
         const statsHTML = `
             <div class="credito-stats-grid">
@@ -1231,10 +1293,116 @@ $simular = isset($_POST['simular']);
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
 
-    #creditos input,
+    #creditos input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
     #creditos select {
         width: 100%;
         min-width: 0;
+    }
+
+    #tipos-credito .tipos-credito-create-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    #tipos-credito .tipos-credito-lista {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    #tipos-credito .tipos-credito-encabezado {
+        display: grid;
+        grid-template-columns: minmax(140px, 1.3fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr) minmax(100px, 0.8fr) minmax(90px, 0.6fr) minmax(170px, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: var(--bg-tertiary);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+
+    #tipos-credito .tipos-credito-row-form {
+        display: grid;
+        grid-template-columns: minmax(140px, 1.3fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr) minmax(100px, 0.8fr) minmax(80px, 0.55fr) minmax(170px, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background: color-mix(in srgb, var(--bg-tertiary) 75%, transparent);
+    }
+
+    #tipos-credito .tipos-credito-row-form>div {
+        min-width: 0;
+    }
+
+    #tipos-credito .tipo-activo-label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    #tipos-credito .tipo-activo-label input[type="checkbox"] {
+        width: auto;
+        min-width: auto;
+    }
+
+    #tipos-credito .tipo-acciones {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+    }
+
+    #tipos-credito .btn-tipo-guardar,
+    #tipos-credito .btn-tipo-eliminar {
+        padding: 7px 12px;
+        border: none;
+        border-radius: 4px;
+        color: #fff;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    #tipos-credito .btn-tipo-guardar {
+        background: rgb(59, 130, 246);
+    }
+
+    #tipos-credito .btn-tipo-eliminar {
+        background: rgb(239, 68, 68);
+    }
+
+    #tipos-credito .btn-tipo-eliminar:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    @media (max-width: 980px) {
+        #tipos-credito .tipos-credito-encabezado {
+            display: none;
+        }
+
+        #tipos-credito .tipos-credito-row-form {
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+        }
+
+        #tipos-credito .tipo-activo-label {
+            justify-content: flex-start;
+        }
+
+        #tipos-credito .tipo-acciones {
+            grid-column: span 2;
+            justify-content: flex-end;
+        }
     }
 
     .search-cliente-wrapper {

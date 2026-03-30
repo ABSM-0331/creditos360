@@ -37,6 +37,7 @@ class CreditosController
 
         // Obtener configuraciones de tipos de crédito
         $configuraciones = $this->creditosService->obtenerTodasLasConfiguraciones();
+        $tiposCredito = $this->creditosService->obtenerTiposCredito(false);
 
         $view = __DIR__ . '/../views/creditos/index.php';
         require __DIR__ . '/../views/layouts/app.php';
@@ -85,7 +86,7 @@ class CreditosController
             if ($pagos <= 0) {
                 throw new Exception('La cantidad de pagos debe ser mayor a 0');
             }
-            if (!in_array($tipo, ['diario', 'semanal', 'mensual'])) {
+            if (!$this->creditosService->validarTipoCreditoExiste($tipo)) {
                 throw new Exception('Tipo de crédito inválido');
             }
 
@@ -144,6 +145,128 @@ class CreditosController
                 'mensaje' => $e->getMessage()
             ]);
         }
+    }
+
+    public function guardarTipo(): void
+    {
+        $this->validarAdministrador();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $_SESSION['error'] = 'Método no permitido';
+            header('Location: /proyecto-residencia/public/creditos');
+            exit;
+        }
+
+        try {
+            $tipo = $this->normalizarTipo((string)($_POST['tipo'] ?? ''));
+            $cantidadPagos = (int)($_POST['cantidad_pagos'] ?? 0);
+            $interesDefault = (float)($_POST['interes_default'] ?? 0);
+            $diasIntervalo = (int)($_POST['dias_intervalo'] ?? 1);
+
+            if ($tipo === '') {
+                throw new Exception('Debes indicar el tipo de crédito');
+            }
+            if ($cantidadPagos <= 0) {
+                throw new Exception('La cantidad de pagos debe ser mayor a 0');
+            }
+            if ($interesDefault < 0) {
+                throw new Exception('El interés por defecto no puede ser negativo');
+            }
+            if ($diasIntervalo <= 0) {
+                throw new Exception('El intervalo en días debe ser mayor a 0');
+            }
+
+            $this->creditosService->crearTipoCredito([
+                'tipo' => $tipo,
+                'cantidad_pagos' => $cantidadPagos,
+                'interes_default' => $interesDefault,
+                'dias_intervalo' => $diasIntervalo,
+            ]);
+
+            $_SESSION['success'] = 'Tipo de crédito creado correctamente';
+        } catch (Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        header('Location: /proyecto-residencia/public/creditos#tipos-credito');
+        exit;
+    }
+
+    public function actualizarTipo(): void
+    {
+        $this->validarAdministrador();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $_SESSION['error'] = 'Método no permitido';
+            header('Location: /proyecto-residencia/public/creditos');
+            exit;
+        }
+
+        try {
+            $idTipo = (int)($_POST['idtipo'] ?? 0);
+            $tipo = $this->normalizarTipo((string)($_POST['tipo'] ?? ''));
+            $cantidadPagos = (int)($_POST['cantidad_pagos'] ?? 0);
+            $interesDefault = (float)($_POST['interes_default'] ?? 0);
+            $diasIntervalo = (int)($_POST['dias_intervalo'] ?? 1);
+            $activo = isset($_POST['activo']) ? 1 : 0;
+
+            if ($idTipo <= 0) {
+                throw new Exception('Tipo de crédito inválido');
+            }
+            if ($tipo === '') {
+                throw new Exception('Debes indicar el tipo de crédito');
+            }
+            if ($cantidadPagos <= 0) {
+                throw new Exception('La cantidad de pagos debe ser mayor a 0');
+            }
+            if ($interesDefault < 0) {
+                throw new Exception('El interés por defecto no puede ser negativo');
+            }
+            if ($diasIntervalo <= 0) {
+                throw new Exception('El intervalo en días debe ser mayor a 0');
+            }
+
+            $this->creditosService->actualizarTipoCredito($idTipo, [
+                'tipo' => $tipo,
+                'cantidad_pagos' => $cantidadPagos,
+                'interes_default' => $interesDefault,
+                'dias_intervalo' => $diasIntervalo,
+                'activo' => $activo,
+            ]);
+
+            $_SESSION['success'] = 'Tipo de crédito actualizado correctamente';
+        } catch (Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        header('Location: /proyecto-residencia/public/creditos#tipos-credito');
+        exit;
+    }
+
+    public function eliminarTipo(): void
+    {
+        $this->validarAdministrador();
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $_SESSION['error'] = 'Método no permitido';
+            header('Location: /proyecto-residencia/public/creditos');
+            exit;
+        }
+
+        try {
+            $idTipo = (int)($_POST['idtipo'] ?? 0);
+            if ($idTipo <= 0) {
+                throw new Exception('Tipo de crédito inválido');
+            }
+
+            $this->creditosService->eliminarTipoCredito($idTipo);
+            $_SESSION['success'] = 'Tipo de crédito eliminado correctamente';
+        } catch (Exception $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
+        header('Location: /proyecto-residencia/public/creditos#tipos-credito');
+        exit;
     }
 
     public function obtener(): void
@@ -488,5 +611,100 @@ class CreditosController
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    public function imprimirTicketTermica(): void
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            header('Content-Type: application/json');
+            http_response_code(405);
+            echo json_encode(['success' => false, 'error' => 'Método no permitido']);
+            exit;
+        }
+
+        if (!isset($_SESSION['usuario_id'])) {
+            header('Content-Type: application/json');
+            http_response_code(401);
+            echo json_encode(['success' => false, 'error' => 'No autorizado']);
+            exit;
+        }
+
+        $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null;
+        $esAdmin = $rol === 1;
+        $esCobratario = $rol === 3;
+        if (!$esAdmin && !$esCobratario) {
+            header('Content-Type: application/json');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'No tiene permisos para imprimir tickets']);
+            exit;
+        }
+
+        try {
+            $idPago = (int)($_POST['idpago'] ?? 0);
+            $idCredito = (int)($_POST['idcredito'] ?? 0);
+            $historialIds = [];
+
+            $historialRaw = $_POST['historial'] ?? null;
+            if (is_array($historialRaw)) {
+                $historialIds = array_map('intval', $historialRaw);
+            } elseif (is_string($historialRaw) && $historialRaw !== '') {
+                $historialIds = array_map('intval', array_filter(explode(',', $historialRaw)));
+            }
+
+            if ($idCredito <= 0 || (empty($historialIds) && $idPago <= 0)) {
+                throw new Exception('Datos inválidos para imprimir el ticket');
+            }
+
+            if (!empty($historialIds)) {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobro($historialIds, $idCredito);
+            } else {
+                $datosRecibo = $this->creditosRepo->obtenerDatosReciboCobroPorPago($idPago, $idCredito);
+            }
+
+            if (!$datosRecibo['success']) {
+                throw new Exception($datosRecibo['error'] ?? 'No se encontró el registro de cobro');
+            }
+
+            $cobro = $datosRecibo['cobro'];
+            $resultadoImpresion = $this->ticketPrinterService->imprimirTicket($cobro);
+
+            if (empty($resultadoImpresion['ok'])) {
+                throw new Exception((string)($resultadoImpresion['error'] ?? 'No se pudo imprimir el ticket'));
+            }
+
+            header('Content-Type: application/json');
+            echo json_encode([
+                'success' => true,
+                'mensaje' => 'Ticket enviado a la impresora térmica correctamente',
+            ]);
+        } catch (Throwable $e) {
+            header('Content-Type: application/json');
+            http_response_code(400);
+            echo json_encode([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function validarAdministrador(): void
+    {
+        if (!isset($_SESSION['usuario_id'])) {
+            header('Location: /proyecto-residencia/public/auth/login');
+            exit;
+        }
+
+        if (isset($_SESSION['usuario_rol']) && $_SESSION['usuario_rol'] !== 1 && $_SESSION['usuario_rol'] !== null) {
+            header('Location: /proyecto-residencia/public/dashboard');
+            exit;
+        }
+    }
+
+    private function normalizarTipo(string $tipo): string
+    {
+        $tipo = strtolower(trim($tipo));
+        $tipo = preg_replace('/[^a-z0-9_\-]/', '_', $tipo);
+        $tipo = preg_replace('/_+/', '_', (string)$tipo);
+        return trim((string)$tipo, '_');
     }
 }

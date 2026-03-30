@@ -6,7 +6,7 @@ class DBC
     private static array $config = [
         'host' => 'localhost',
         'port' => 3306,
-        'db' => 'sistema_creditos360',
+        'db' => 'crediox',
         'user' => 'root',
         'password' => '',
         'charset' => 'utf8mb4',

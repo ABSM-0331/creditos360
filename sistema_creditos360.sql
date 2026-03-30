@@ -24,6 +24,48 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `impresoras`
+--
+
+CREATE TABLE `impresoras` (
+  `idimpresora` int(11) NOT NULL,
+  `nombre` varchar(150) NOT NULL,
+  `activa` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `tipos_credito`
+--
+
+CREATE TABLE `tipos_credito` (
+  `idtipo` int(11) NOT NULL,
+  `tipo` varchar(50) NOT NULL,
+  `cantidad_pagos` int(11) NOT NULL,
+  `interes_default` decimal(5,2) NOT NULL,
+  `dias_intervalo` int(11) NOT NULL DEFAULT 1,
+  `es_flexible` tinyint(1) NOT NULL DEFAULT 0,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `tipos_credito`
+--
+
+INSERT INTO `tipos_credito` (`idtipo`, `tipo`, `cantidad_pagos`, `interes_default`, `dias_intervalo`, `es_flexible`, `activo`, `created_at`, `updated_at`) VALUES
+(1, 'diario', 35, 22.50, 1, 0, 1, current_timestamp(), current_timestamp()),
+(2, 'semanal', 12, 50.00, 7, 0, 1, current_timestamp(), current_timestamp()),
+(3, 'quincenal', 6, 30.00, 15, 0, 1, current_timestamp(), current_timestamp()),
+(4, 'mensual', 3, 50.00, 30, 1, 1, current_timestamp(), current_timestamp());
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `creditos`
 --
 
@@ -32,7 +74,7 @@ CREATE TABLE `creditos` (
   `idcliente` int(11) NOT NULL,
   `idcobratario` int(11) DEFAULT NULL,
   `monto` decimal(10,2) NOT NULL,
-  `tipo` enum('diario','semanal','mensual') NOT NULL,
+  `tipo` varchar(50) NOT NULL,
   `interes` decimal(5,2) NOT NULL,
   `moratorio` decimal(10,2) NOT NULL,
   `cantidad_pagos` int(11) NOT NULL,
@@ -3050,6 +3092,13 @@ ALTER TABLE `creditos`
   ADD KEY `idx_estado` (`estado`);
 
 --
+-- Indices de la tabla `tipos_credito`
+--
+ALTER TABLE `tipos_credito`
+  ADD PRIMARY KEY (`idtipo`),
+  ADD UNIQUE KEY `uk_tipo_credito_tipo` (`tipo`);
+
+--
 -- Indices de la tabla `datos_empresa`
 --
 ALTER TABLE `datos_empresa`
@@ -3071,6 +3120,13 @@ ALTER TABLE `historial_pagos`
   ADD KEY `idx_credito` (`idcredito`),
   ADD KEY `idx_fecha` (`fecha_pago`),
   ADD KEY `idx_historial_grupo_cobro` (`grupo_cobro`);
+
+--
+-- Indices de la tabla `impresoras`
+--
+ALTER TABLE `impresoras`
+  ADD PRIMARY KEY (`idimpresora`),
+  ADD UNIQUE KEY `uk_impresora_nombre` (`nombre`);
 
 --
 -- Indices de la tabla `municipios`
@@ -3124,10 +3180,22 @@ ALTER TABLE `creditos`
   MODIFY `idcredito` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
+-- AUTO_INCREMENT de la tabla `tipos_credito`
+--
+ALTER TABLE `tipos_credito`
+  MODIFY `idtipo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
 -- AUTO_INCREMENT de la tabla `historial_pagos`
 --
 ALTER TABLE `historial_pagos`
   MODIFY `idhistorial` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+
+--
+-- AUTO_INCREMENT de la tabla `impresoras`
+--
+ALTER TABLE `impresoras`
+  MODIFY `idimpresora` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
 
 --
 -- AUTO_INCREMENT de la tabla `pagos_credito`

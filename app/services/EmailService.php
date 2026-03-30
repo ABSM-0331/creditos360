@@ -1,5 +1,8 @@
 <?php
 
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
+use PHPMailer\PHPMailer\PHPMailer;
+
 class EmailService
 {
     public function enviarHtml(string $to, string $subject, string $html, array $options = []): void
@@ -16,133 +19,57 @@ class EmailService
         $pass = trim((string)$this->env('SMTP_PASS', ''));
         $port = (int)$this->env('SMTP_PORT', '587');
         $encryption = strtolower(trim((string)$this->env('SMTP_ENCRYPTION', 'tls')));
+        $smtpAuthRaw = strtolower(trim((string)$this->env('SMTP_AUTH', 'true')));
+        $smtpAuth = !in_array($smtpAuthRaw, ['0', 'false', 'no', 'off'], true);
+        $timeout = (int)$this->env('SMTP_TIMEOUT', '20');
+        $debugLevel = (int)$this->env('SMTP_DEBUG', '0');
 
         if ($host === '' || $user === '' || $pass === '') {
             throw new Exception('SMTP no configurado correctamente. Define SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_ENCRYPTION en el entorno de Apache.');
         }
 
-        $this->enviarPorSmtp($host, $port, $encryption, $user, $pass, $from, $fromName, $to, $subject, $html);
-    }
-
-    private function enviarPorSmtp(
-        string $host,
-        int $port,
-        string $encryption,
-        string $user,
-        string $pass,
-        string $from,
-        string $fromName,
-        string $to,
-        string $subject,
-        string $html
-    ): void {
-        $transport = ($encryption === 'ssl') ? 'ssl://' : 'tcp://';
-        $remote = $transport . $host . ':' . $port;
-
-        $errno = 0;
-        $errstr = '';
-        $socket = @stream_socket_client($remote, $errno, $errstr, 20, STREAM_CLIENT_CONNECT);
-        if (!is_resource($socket)) {
-            throw new Exception('No se pudo conectar al servidor SMTP: ' . $errstr);
+        if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+            $from = $user;
         }
 
-        stream_set_timeout($socket, 20);
+        if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception('SMTP_FROM no es un correo válido.');
+        }
+
+        $secure = '';
+        if ($encryption === 'ssl' || $encryption === 'smtps') {
+            $secure = PHPMailer::ENCRYPTION_SMTPS;
+        } elseif ($encryption === 'tls' || $encryption === 'starttls') {
+            $secure = PHPMailer::ENCRYPTION_STARTTLS;
+        }
 
         try {
-            $this->assertResponse($socket, [220]);
-            $this->sendCommand($socket, 'EHLO localhost', [250]);
+            $mail = new PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = $host;
+            $mail->Port = $port > 0 ? $port : 587;
+            $mail->SMTPAuth = $smtpAuth;
+            $mail->Username = $user;
+            $mail->Password = $pass;
+            $mail->SMTPSecure = $secure;
+            $mail->Timeout = $timeout > 0 ? $timeout : 20;
+            $mail->SMTPDebug = max(0, $debugLevel);
+            $mail->CharSet = 'UTF-8';
 
-            if ($encryption === 'tls') {
-                $this->sendCommand($socket, 'STARTTLS', [220]);
-                $cryptoEnabled = stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-                if ($cryptoEnabled !== true) {
-                    throw new Exception('No se pudo establecer canal TLS con SMTP.');
-                }
-                $this->sendCommand($socket, 'EHLO localhost', [250]);
-            }
+            $mail->setFrom($from, $fromName !== '' ? $fromName : 'Sistema de Creditos');
+            $mail->addAddress($to);
 
-            $this->sendCommand($socket, 'AUTH LOGIN', [334]);
-            $this->sendCommand($socket, base64_encode($user), [334]);
-            $this->sendCommand($socket, base64_encode($pass), [235]);
+            $mail->isHTML(true);
+            $mail->Subject = $subject;
+            $mail->Body = $html;
+            $mail->AltBody = trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], PHP_EOL, $html)));
 
-            $this->sendCommand($socket, 'MAIL FROM:<' . $from . '>', [250]);
-            $this->sendCommand($socket, 'RCPT TO:<' . $to . '>', [250, 251]);
-            $this->sendCommand($socket, 'DATA', [354]);
-
-            $headers = [
-                'Date: ' . date('r'),
-                'From: ' . $this->formatearFrom($from, $fromName),
-                'To: <' . $to . '>',
-                'Subject: ' . $this->encodeHeader($subject),
-                'MIME-Version: 1.0',
-                'Content-Type: text/html; charset=UTF-8',
-                'Content-Transfer-Encoding: 8bit',
-            ];
-
-            $body = implode("\r\n", $headers) . "\r\n\r\n" . $html;
-            $body = preg_replace('/(?m)^\./', '..', $body);
-
-            fwrite($socket, $body . "\r\n.\r\n");
-            $this->assertResponse($socket, [250]);
-
-            $this->sendCommand($socket, 'QUIT', [221]);
-        } finally {
-            fclose($socket);
+            $mail->send();
+        } catch (PHPMailerException $e) {
+            throw new Exception('No se pudo enviar el correo: ' . $e->getMessage());
+        } catch (Throwable $e) {
+            throw new Exception('Error inesperado al enviar correo: ' . $e->getMessage());
         }
-    }
-
-    private function sendCommand($socket, string $command, array $expectedCodes): void
-    {
-        fwrite($socket, $command . "\r\n");
-        $this->assertResponse($socket, $expectedCodes);
-    }
-
-    private function assertResponse($socket, array $expectedCodes): void
-    {
-        [$code, $message] = $this->readResponse($socket);
-        if (!in_array($code, $expectedCodes, true)) {
-            throw new Exception('SMTP respondio ' . $code . ': ' . trim($message));
-        }
-    }
-
-    private function readResponse($socket): array
-    {
-        $message = '';
-        $code = 0;
-
-        while (($line = fgets($socket, 515)) !== false) {
-            $message .= $line;
-            if (preg_match('/^(\d{3})([\s-])/', $line, $matches)) {
-                $code = (int)$matches[1];
-                if ($matches[2] === ' ') {
-                    break;
-                }
-            }
-        }
-
-        if ($code === 0) {
-            throw new Exception('No se recibio respuesta valida del servidor SMTP.');
-        }
-
-        return [$code, $message];
-    }
-
-    private function formatearFrom(string $email, string $name): string
-    {
-        if ($name === '') {
-            return '<' . $email . '>';
-        }
-
-        return '"' . addslashes($name) . '" <' . $email . '>';
-    }
-
-    private function encodeHeader(string $text): string
-    {
-        if ($text === '') {
-            return '';
-        }
-
-        return '=?UTF-8?B?' . base64_encode($text) . '?=';
     }
 
     private function env(string $key, string $default = ''): string

@@ -106,6 +106,49 @@
 // // ===== Initialize =====
 // console.log("Aplicación de Gestión inicializada");
 
+// ===== Sidebar responsive (tablet/mobile) =====
+document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.querySelector(".sidebar");
+    const menuToggle = document.getElementById("menuToggle");
+
+    if (!sidebar || !menuToggle) {
+        return;
+    }
+
+    let overlay = document.querySelector(".sidebar-overlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.className = "sidebar-overlay";
+        document.body.appendChild(overlay);
+    }
+
+    const closeSidebar = () => {
+        sidebar.classList.remove("open");
+        overlay.classList.remove("active");
+    };
+
+    menuToggle.addEventListener("click", function () {
+        const isOpen = sidebar.classList.toggle("open");
+        overlay.classList.toggle("active", isOpen);
+    });
+
+    overlay.addEventListener("click", closeSidebar);
+
+    document.querySelectorAll(".sidebar .nav-link").forEach((link) => {
+        link.addEventListener("click", function () {
+            if (window.innerWidth <= 1024) {
+                closeSidebar();
+            }
+        });
+    });
+
+    window.addEventListener("resize", function () {
+        if (window.innerWidth > 1024) {
+            closeSidebar();
+        }
+    });
+});
+
 const fechas = document.querySelectorAll(".fecha_nacimiento");
 fechas.forEach((fechaNacimiento) => {
     fechaNacimiento.addEventListener("change", function () {

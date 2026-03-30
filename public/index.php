@@ -82,6 +82,18 @@ switch ($uri) {
     case 'empresa/guardar':
         (new EmpresaController())->guardar();
         break;
+    case 'impresoras':
+        (new ImpresorasController())->index();
+        break;
+    case 'impresoras/guardar':
+        (new ImpresorasController())->guardar();
+        break;
+    case 'impresoras/eliminar':
+        (new ImpresorasController())->eliminar();
+        break;
+    case 'impresoras/activar':
+        (new ImpresorasController())->activar();
+        break;
     case 'nuevo-usuario':
         (new UsuariosController())->vistaCrear();
         break;
@@ -100,6 +112,15 @@ switch ($uri) {
     case 'creditos/guardar':
         (new CreditosController())->guardar();
         break;
+    case 'creditos/tipos/guardar':
+        (new CreditosController())->guardarTipo();
+        break;
+    case 'creditos/tipos/actualizar':
+        (new CreditosController())->actualizarTipo();
+        break;
+    case 'creditos/tipos/eliminar':
+        (new CreditosController())->eliminarTipo();
+        break;
     case 'creditos/obtener':
         (new CreditosController())->obtener();
         break;
@@ -114,6 +135,9 @@ switch ($uri) {
         break;
     case 'creditos/enviar-ticket':
         (new CreditosController())->enviarTicket();
+        break;
+    case 'creditos/imprimir-ticket':
+        (new CreditosController())->imprimirTicketTermica();
         break;
     case 'api/estados':
         (new UbicacionesController())->obtenerEstados();

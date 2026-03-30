@@ -5,7 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gestión</title>
-    <link rel="stylesheet" href="/assets/css/styles.css">
+    <?php
+    $cssPath = __DIR__ . '/../../../public/assets/css/styles.css';
+    $cssVersion = file_exists($cssPath) ? filemtime($cssPath) : time();
+    ?>
+    <link rel="stylesheet" href="/assets/css/styles.css?v=<?= (int)$cssVersion ?>">
 </head>
 
 <body>

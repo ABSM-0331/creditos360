@@ -1205,6 +1205,224 @@ a:hover {
     justify-content: flex-end;
 }
 
+#dashboardCliente .data-table th,
+#dashboardCliente .data-table td {
+    text-align: center;
+}
+
+#dashboardCliente .data-table td {
+    vertical-align: middle;
+}
+
+#dashboardCliente .badge {
+    min-width: 88px;
+    justify-content: center;
+}
+
+.cliente-creditos-lista {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.cliente-credito-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.cliente-credito-summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.cliente-credito-summary::-webkit-details-marker {
+    display: none;
+}
+
+.cliente-credito-summary-main h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 17px;
+}
+
+.cliente-credito-summary-main p {
+    margin: 4px 0 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.cliente-credito-summary-metrics {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.cliente-credito-summary-metrics div {
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+}
+
+.cliente-credito-summary-metrics span {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.cliente-credito-summary-metrics strong {
+    color: var(--text-primary);
+    font-size: 15px;
+}
+
+.cliente-credito-detalle {
+    border-top: 1px solid var(--border-color);
+    padding: 14px 18px 16px;
+}
+
+/* ===== Catalogo Tipos de Credito ===== */
+#tipos-credito .tipos-credito-create-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+#tipos-credito .tipos-credito-create-form input,
+#tipos-credito .tipos-credito-row-form input[type="text"],
+#tipos-credito .tipos-credito-row-form input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    padding: 0.625rem 0.875rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    font-family: inherit;
+    outline: none;
+    transition: var(--transition);
+}
+
+#tipos-credito .tipos-credito-create-form input:focus,
+#tipos-credito .tipos-credito-row-form input[type="text"]:focus,
+#tipos-credito .tipos-credito-row-form input[type="number"]:focus {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+}
+
+#tipos-credito .tipos-credito-create-form input::placeholder {
+    color: var(--text-muted);
+}
+
+#tipos-credito .tipos-credito-row-form input[readonly] {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
+
+#tipos-credito .tipos-credito-create-form input:-webkit-autofill,
+#tipos-credito .tipos-credito-create-form input:-webkit-autofill:hover,
+#tipos-credito .tipos-credito-create-form input:-webkit-autofill:focus,
+#tipos-credito .tipos-credito-row-form input:-webkit-autofill,
+#tipos-credito .tipos-credito-row-form input:-webkit-autofill:hover,
+#tipos-credito .tipos-credito-row-form input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text-primary);
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-tertiary) inset;
+    box-shadow: 0 0 0 1000px var(--bg-tertiary) inset;
+    transition: background-color 9999s ease-out 0s;
+}
+
+#tipos-credito .tipos-credito-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#tipos-credito .tipos-credito-encabezado {
+    display: grid;
+    grid-template-columns:
+        minmax(140px, 1.3fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr)
+        minmax(100px, 0.8fr) minmax(90px, 0.6fr) minmax(170px, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+#tipos-credito .tipos-credito-row-form {
+    display: grid;
+    grid-template-columns:
+        minmax(140px, 1.3fr) minmax(90px, 0.8fr) minmax(110px, 0.9fr)
+        minmax(100px, 0.8fr) minmax(80px, 0.55fr) minmax(170px, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: rgba(21, 32, 56, 0.35);
+}
+
+#tipos-credito .tipos-credito-row-form > div {
+    min-width: 0;
+}
+
+#tipos-credito .tipo-activo-label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+#tipos-credito .tipo-activo-label input[type="checkbox"] {
+    width: auto;
+    min-width: auto;
+}
+
+#tipos-credito .tipo-acciones {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+}
+
+#tipos-credito .btn-tipo-guardar,
+#tipos-credito .btn-tipo-eliminar {
+    padding: 7px 12px;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#tipos-credito .btn-tipo-guardar {
+    background: #3b82f6;
+}
+
+#tipos-credito .btn-tipo-eliminar {
+    background: #ef4444;
+}
+
+#tipos-credito .btn-tipo-eliminar:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
     .credito-stats-grid {
         grid-template-columns: 1fr;
@@ -1227,6 +1445,23 @@ a:hover {
     .credito-actions .btn-secondary {
         width: 100%;
         justify-content: center;
+    }
+
+    #tipos-credito .tipos-credito-encabezado {
+        display: none;
+    }
+
+    #tipos-credito .tipos-credito-row-form {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+
+    #tipos-credito .tipo-activo-label {
+        justify-content: flex-start;
+    }
+
+    #tipos-credito .tipo-acciones {
+        grid-column: span 2;
+        justify-content: flex-end;
     }
 }
 
@@ -1300,4 +1535,124 @@ a:hover {
 
 .sidebar-overlay.active {
     display: block;
+}
+
+/* ===== Tablet & Mobile Responsive (Global) ===== */
+@media (max-width: 1024px) {
+    .sidebar {
+        transform: translateX(-100%);
+        width: min(320px, 86vw);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main-content {
+        margin-left: 0;
+    }
+
+    .menu-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .main-header {
+        padding: 0.875rem 1rem;
+    }
+
+    .main-header h1 {
+        font-size: 1.2rem;
+    }
+
+    .content-wrapper {
+        padding: 1rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 1rem;
+    }
+
+    .table-container,
+    .credito-table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .data-table {
+        min-width: 720px;
+    }
+
+    .form-section {
+        padding: 1rem 1.1rem;
+    }
+
+    .form-actions {
+        padding: 1rem 1.1rem;
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+    }
+
+    .btn-primary,
+    .btn-secondary,
+    .btn-icon,
+    .logout-btn,
+    .nav-link {
+        min-height: 44px;
+    }
+}
+
+@media (max-width: 768px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .header-right .user-name {
+        display: none;
+    }
+
+    .section-header {
+        align-items: flex-start;
+    }
+
+    .action-buttons {
+        flex-wrap: wrap;
+    }
+
+    .data-table {
+        min-width: 640px;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-wrapper {
+        padding: 0.875rem;
+    }
+
+    .main-header {
+        padding: 0.75rem 0.875rem;
+    }
+
+    .main-header h1 {
+        font-size: 1.05rem;
+    }
+
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .form-actions .btn-lg,
+    .form-actions .btn-primary,
+    .form-actions .btn-secondary {
+        width: 100%;
+        justify-content: center;
+    }
 }

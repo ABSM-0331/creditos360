@@ -409,18 +409,11 @@ $resumenCobratario = $resumenCobratario ?? [
         const interes = totalPagar - montoOriginal;
 
         // Determinar el label del pago según el tipo
-        let labelPago = 'Pago';
-        switch (credito.tipo.toLowerCase()) {
-            case 'diario':
-                labelPago = 'Pago diario';
-                break;
-            case 'semanal':
-                labelPago = 'Pago semanal';
-                break;
-            case 'mensual':
-                labelPago = 'Pago mensual';
-                break;
-        }
+        const tipoTexto = String(credito.tipo || '')
+            .toLowerCase()
+            .replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, (letra) => letra.toUpperCase());
+        const labelPago = `Pago ${tipoTexto.toLowerCase()}`;
 
         const statsHTML = `
             <div class="credito-stats-grid">

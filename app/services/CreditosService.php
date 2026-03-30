@@ -13,31 +13,20 @@ class CreditosService
      */
     public function obtenerConfiguracionTipo(string $tipo): array
     {
-        $configuraciones = [
-            'diario' => [
-                'pagos' => 35,
-                'interes' => 22.5,
-                'moratorio' => 35,
-                'modo' => 'fijo',
-                'intervalo' => 'P1D'
-            ],
-            'semanal' => [
-                'pagos' => 12,
-                'interes' => 50,
-                'moratorio' => 125,
-                'modo' => 'fijo',
-                'intervalo' => 'P7D'
-            ],
-            'mensual' => [
-                'pagos' => 3,
-                'interes' => 50,
-                'moratorio' => 800,
-                'modo' => 'flexible',
-                'intervalo' => 'P1M'
-            ]
-        ];
+        $configuraciones = $this->obtenerTodasLasConfiguraciones();
+        if (isset($configuraciones[$tipo])) {
+            return $configuraciones[$tipo];
+        }
 
-        return $configuraciones[$tipo] ?? $configuraciones['mensual'];
+        return !empty($configuraciones) ? reset($configuraciones) : [
+            'pagos' => 1,
+            'interes' => 0,
+            'moratorio' => 35,
+            'modo' => 'fijo',
+            'intervalo' => 'P1D',
+            'dias_intervalo' => 1,
+            'es_flexible' => false,
+        ];
     }
 
     /**
@@ -45,11 +34,7 @@ class CreditosService
      */
     public function obtenerTodasLasConfiguraciones(): array
     {
-        return [
-            'diario' => $this->obtenerConfiguracionTipo('diario'),
-            'semanal' => $this->obtenerConfiguracionTipo('semanal'),
-            'mensual' => $this->obtenerConfiguracionTipo('mensual')
-        ];
+        return $this->creditosRepo->obtenerConfiguracionesTiposCredito();
     }
 
     /**
@@ -58,5 +43,38 @@ class CreditosService
     public function guardarCredito(array $datos)
     {
         return $this->creditosRepo->guardarCredito($datos);
+    }
+
+    public function obtenerTiposCredito(bool $soloActivos = true): array
+    {
+        return $this->creditosRepo->obtenerTiposCredito($soloActivos);
+    }
+
+    public function validarTipoCreditoExiste(string $tipo): bool
+    {
+        $tipoBuscado = strtolower(trim($tipo));
+        $tiposActivos = $this->creditosRepo->obtenerTiposCredito(true);
+        foreach ($tiposActivos as $item) {
+            if (strtolower((string)$item['tipo']) === $tipoBuscado) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function crearTipoCredito(array $datos): int
+    {
+        return $this->creditosRepo->crearTipoCredito($datos);
+    }
+
+    public function actualizarTipoCredito(int $idTipo, array $datos): bool
+    {
+        return $this->creditosRepo->actualizarTipoCredito($idTipo, $datos);
+    }
+
+    public function eliminarTipoCredito(int $idTipo): bool
+    {
+        return $this->creditosRepo->eliminarTipoCredito($idTipo);
     }
 }

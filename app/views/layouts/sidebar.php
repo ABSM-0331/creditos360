@@ -154,6 +154,19 @@ if (class_exists('EmpresaService')) {
                     </a>
                 </li>
             <?php endif; ?>
+
+            <?php if ($rol !== 2): ?>
+                <li>
+                    <a href="/proyecto-residencia/public/impresoras" class="nav-link <?= str_contains($currentPath, '/impresoras') ? 'active' : '' ?>">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                            <rect x="6" y="14" width="12" height="8"></rect>
+                        </svg>
+                        <span>Impresoras</span>
+                    </a>
+                </li>
+            <?php endif; ?>
         </ul>
     </nav>
 

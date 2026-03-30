@@ -32,7 +32,8 @@ class TicketPrinterService
                 }
             }
 
-            $connector = new WindowsPrintConnector("POS-58");
+            $nombreImpresora = $this->obtenerNombreImpresoraActiva();
+            $connector = new WindowsPrintConnector($nombreImpresora);
             $printer = new Printer($connector);
 
             // Helpers
@@ -40,6 +41,14 @@ class TicketPrinterService
                 $izq = substr($izq, 0, 22);
                 $der = substr($der, 0, 10);
                 return str_pad($izq, 22) . str_pad($der, 10, " ", STR_PAD_LEFT) . "\n";
+            };
+
+            $envolver = function ($texto, $ancho = 32) {
+                $limpio = trim(preg_replace('/\s+/', ' ', (string)$texto));
+                if ($limpio === '') {
+                    return [];
+                }
+                return explode("\n", wordwrap($limpio, $ancho, "\n", true));
             };
 
             $center = function ($text) {
@@ -68,7 +77,7 @@ class TicketPrinterService
             $montoPagado = (float)($cobro['resumen']['total_cobrado'] ?? 0);
             $capital = (float)($cobro['resumen']['total_programado'] ?? 0);
             $interes = (float)($cobro['resumen']['total_moratorio'] ?? 0);
-            $saldoRestante = (float)($cobro['credito']['saldo_pendiente'] ?? 0);
+            $saldoRestante = (float)($cobro['credito']['saldo_pendiente_momento'] ?? ($cobro['credito']['saldo_pendiente'] ?? 0));
 
             // ======= IMPRESIÓN =======
 
@@ -88,8 +97,14 @@ class TicketPrinterService
             $printer->setJustification(Printer::JUSTIFY_LEFT);
             $printer->text($linea("Recibo:", $numeroRecibo));
             $printer->text($linea("Fecha:", $fecha));
-            $printer->text($linea("Cliente:", $cliente));
-            $printer->text($linea("Cobrador:", $cobrador));
+            $printer->text("Cliente:\n");
+            foreach ($envolver($cliente, 32) as $lineaCliente) {
+                $printer->text($lineaCliente . "\n");
+            }
+            $printer->text("Cobrador:\n");
+            foreach ($envolver($cobrador, 32) as $lineaCobrador) {
+                $printer->text($lineaCobrador . "\n");
+            }
 
             $printer->text($sep());
 
@@ -170,7 +185,7 @@ class TicketPrinterService
         $montoPagado = (float)($cobro['resumen']['total_cobrado'] ?? ($primerPago['monto_pagado'] ?? 0));
         $capital = (float)($cobro['resumen']['total_programado'] ?? ($primerPago['monto_programado'] ?? 0));
         $interes = (float)($cobro['resumen']['total_moratorio'] ?? 0);
-        $saldoRestante = (float)($cobro['credito']['saldo_pendiente'] ?? 0);
+        $saldoRestante = (float)($cobro['credito']['saldo_pendiente_momento'] ?? ($cobro['credito']['saldo_pendiente'] ?? 0));
         $cantidadPagos = max(1, (int)($cobro['resumen']['cantidad_pagos_cobrados'] ?? count($pagos)));
         $idCredito = (int)($cobro['credito']['idcredito'] ?? 0);
         $historialIds = array_values(array_unique(array_filter(array_map(
@@ -365,7 +380,7 @@ class TicketPrinterService
                 <div class="footer">Gracias por su pago</div>
 
                 <div class="actions">
-                    <button class="btn" onclick="imprimir()">
+                    <button class="btn btn-print" onclick="imprimir()">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="6 9 6 2 18 2 18 9"></polyline>
                             <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -386,10 +401,41 @@ class TicketPrinterService
 
             <script>
 
-                imprimir(){
-                    
+                window.imprimir = async function () {
+                    const btn = document.querySelector(".btn-print");
+                    const textoOriginal = btn ? btn.innerHTML : "";
+
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.textContent = "Imprimiendo...";
+                    }
+
+                    try {
+                        const formData = new FormData();
+                        formData.append("idcredito", ' . (int)$idCredito . ');
+                        formData.append("historial", ' . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');
+
+                        const response = await fetch("/proyecto-residencia/public/creditos/imprimir-ticket", {
+                            method: "POST",
+                            body: formData,
+                        });
+
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.error || "No se pudo imprimir en la impresora térmica.");
+                        }
+
+                        window.alert(data.mensaje || "Ticket enviado a impresora térmica.");
+                    } catch (error) {
+                        window.alert("Error al imprimir ticket: " + (error.message || "Error desconocido"));
+                    } finally {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = textoOriginal;
+                        }
+                    }
                 }
-                async function enviarTicketCorreo() {
+                window.enviarTicketCorreo = async function () {
                     const correoSugerido = ' . json_encode($clienteEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' || "";
                     const correo = window.prompt("Correo del cliente", correoSugerido);
                     if (correo === null) {
@@ -458,5 +504,25 @@ class TicketPrinterService
     private function money(float $monto): string
     {
         return number_format($monto, 2, '.', ',');
+    }
+
+    private function obtenerNombreImpresoraActiva(): string
+    {
+        if (!class_exists('ImpresorasService')) {
+            throw new Exception('No se encontró el módulo de impresoras.');
+        }
+
+        $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($usuarioId <= 0) {
+            throw new Exception('No hay sesión activa para resolver la impresora del usuario.');
+        }
+
+        $activa = (new ImpresorasService())->obtenerActiva($usuarioId);
+        $nombre = trim((string)($activa['nombre'] ?? ''));
+        if ($nombre === '') {
+            throw new Exception('No tienes una impresora activa registrada. Ve al módulo Impresoras y activa una.');
+        }
+
+        return $nombre;
     }
 }
