@@ -148,6 +148,9 @@ switch ($uri) {
     case 'logout':
         (new AuthController())->logout();
         break;
+    case "test":
+        require_once __DIR__ . '/testear_ticket.php';
+        break;
     default:
         http_response_code(404);
         echo "404 Not Found";

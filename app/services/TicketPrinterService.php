@@ -202,6 +202,45 @@ class TicketPrinterService
             $detallePagos .= '<div class="row row-pago"><span>Letra #' . $numeroPago . ' (' . $fechaPagoProgramada . ')</span><span class="value">$' . $this->money($montoPagoItem) . '</span></div>';
         }
 
+        $lineasImpresion = [];
+        if (!empty($empresa['direccion'])) {
+            $lineasImpresion[] = (string)$empresa['direccion'];
+        }
+        if (!empty($empresa['telefono'])) {
+            $lineasImpresion[] = 'Tel: ' . (string)$empresa['telefono'];
+        }
+        $lineasImpresion[] = '';
+        $lineasImpresion[] = 'Recibo: ' . (string)($cobro['numero_recibo'] ?? 'N/A');
+        $lineasImpresion[] = 'Fecha: ' . $this->formatearFecha((string)($cobro['fecha'] ?? date('Y-m-d')));
+        $lineasImpresion[] = 'Cliente: ' . (string)($cobro['cliente']['nombre'] ?? 'N/A');
+        $lineasImpresion[] = 'Cobratario: ' . (string)($cobro['cobrador'] ?? 'N/A');
+        $lineasImpresion[] = str_repeat('-', 32);
+        $lineasImpresion[] = 'Letras cobradas: ' . (string)$cantidadPagos;
+
+        foreach ($pagos as $pago) {
+            $numeroPago = (int)($pago['numero_pago'] ?? 0);
+            $fechaPago = $this->formatearFecha((string)($pago['fecha_programada'] ?? ''));
+            $montoItem = number_format((float)($pago['monto_pagado'] ?? 0), 2, '.', ',');
+            $lineasImpresion[] = 'L#' . $numeroPago . ' ' . $fechaPago . ' $' . $montoItem;
+        }
+
+        $lineasImpresion[] = str_repeat('-', 32);
+        $lineasImpresion[] = 'Monto pagado: $' . $this->money($montoPagado);
+        $lineasImpresion[] = 'Capital: $' . $this->money($capital);
+        $lineasImpresion[] = 'Interes moratorio: $' . $this->money($interes);
+        $lineasImpresion[] = 'Saldo restante: $' . $this->money($saldoRestante);
+        $lineasImpresion[] = str_repeat('-', 32);
+        $lineasImpresion[] = 'Gracias por su pago';
+
+        $payloadImpresion = [
+            'Title' => (string)($empresa['nombre_empresa'] ?? 'Ticket de Cobro'),
+            'Lines' => $lineasImpresion,
+            'Cut' => true,
+            'PaperWidthPx' => 200,
+            'FontName' => 'Consolas',
+            'FontSize' => 7,
+        ];
+
         $htmlLogo = $logoUrl !== ''
             ? '<img class="logo" src="' . $this->esc($logoUrl) . '" alt="Logo">'
             : '';
@@ -401,6 +440,39 @@ class TicketPrinterService
 
             <script>
 
+                const PRINT_BASE = "http://127.0.0.1:9666";
+                const PRINT_AGENT = PRINT_BASE + "/print";
+                const PRINT_STATUS = PRINT_BASE + "/status";
+                const PRINT_TOKEN = "secreto-123";
+                const ticketPayload = ' . json_encode($payloadImpresion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';
+
+                async function fetchWithTimeout(resource, options = {}) {
+                    const { timeout = 30000, ...opts } = options;
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), timeout);
+                    try {
+                        return await fetch(resource, { ...opts, signal: controller.signal });
+                    } finally {
+                        clearTimeout(timer);
+                    }
+                }
+
+                async function detectarAgente() {
+                    try {
+                        const response = await fetchWithTimeout(PRINT_STATUS, { method: "GET", timeout: 2000 });
+                        if (!response.ok) {
+                            return "dotnet";
+                        }
+                        const data = await response.json().catch(() => ({}));
+                        if (data && typeof data === "object" && "btConnected" in data && "mac" in data) {
+                            return "b4a";
+                        }
+                        return "dotnet";
+                    } catch (error) {
+                        return "dotnet";
+                    }
+                }
+
                 window.imprimir = async function () {
                     const btn = document.querySelector(".btn-print");
                     const textoOriginal = btn ? btn.innerHTML : "";
@@ -411,21 +483,66 @@ class TicketPrinterService
                     }
 
                     try {
-                        const formData = new FormData();
-                        formData.append("idcredito", ' . (int)$idCredito . ');
-                        formData.append("historial", ' . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');
+                        const tipoAgente = await detectarAgente();
+                        let response;
 
-                        const response = await fetch("/proyecto-residencia/public/creditos/imprimir-ticket", {
-                            method: "POST",
-                            body: formData,
-                        });
-
-                        const data = await response.json();
-                        if (!response.ok || !data.success) {
-                            throw new Error(data.error || "No se pudo imprimir en la impresora térmica.");
+                        if (tipoAgente === "b4a") {
+                            response = await fetchWithTimeout(PRINT_AGENT, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "X-PRINT-TOKEN": PRINT_TOKEN
+                                },
+                                body: JSON.stringify({
+                                    url: window.location.href
+                                }),
+                                timeout: 25000
+                            });
+                        } else {
+                            response = await fetchWithTimeout(PRINT_AGENT, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "X-PRINT-TOKEN": PRINT_TOKEN
+                                },
+                                body: JSON.stringify(ticketPayload),
+                                timeout: 45000
+                            });
                         }
 
-                        window.alert(data.mensaje || "Ticket enviado a impresora térmica.");
+                        let data = null;
+                        const raw = await response.text();
+                        try {
+                            data = JSON.parse(raw);
+                        } catch (e) {
+                            data = { ok: response.ok, mensaje: raw };
+                        }
+
+                        if (!response.ok || !(data.ok === true || data.success === true)) {
+                            throw new Error(data.error || data.mensaje || "No se pudo imprimir con el agente local.");
+                        }
+
+                        window.alert(data.mensaje || "Ticket enviado a impresora.");
+                    } catch (errorAgente) {
+                        try {
+                            const formData = new FormData();
+                            formData.append("idcredito", ' . (int)$idCredito . ');
+                            formData.append("historial", ' . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');
+
+                            const response = await fetch("/proyecto-residencia/public/creditos/imprimir-ticket", {
+                                method: "POST",
+                                body: formData,
+                            });
+
+                            const data = await response.json();
+                            if (!response.ok || !data.success) {
+                                throw new Error(data.error || "No se pudo imprimir en la impresora térmica.");
+                            }
+
+                            window.alert(data.mensaje || "Ticket enviado a impresora térmica.");
+                        } catch (errorBackend) {
+                            throw new Error(errorBackend.message || errorAgente.message || "Error desconocido");
+                        }
                     } catch (error) {
                         window.alert("Error al imprimir ticket: " + (error.message || "Error desconocido"));
                     } finally {

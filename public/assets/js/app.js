@@ -358,3 +358,61 @@ function cargarMunicipios(idestado, selectElement) {
             });
         });
 }
+const boton = document.querySelector(".btn-testear");
+
+boton.addEventListener("click", async function () {
+    console.log("Botón de testear ticket clickeado");
+    const nombreImpresora = "POS58";
+    const rutaLogo =
+        "uploads/empresa/empresa_69bec366ba1ea8.67900912_logo.jpeg";
+    try {
+        // 1) Pedir a PHP que construya el ticket
+        const resp = await fetch(
+            "http://localhost:81/proyecto-residencia/public/test",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams({
+                    impresora: nombreImpresora,
+                    ruta_img: rutaLogo,
+                }),
+            },
+        );
+
+        if (!resp.ok) {
+            throw new Error(
+                "PHP devolvió " + resp.status + ": " + (await resp.text()),
+            );
+        }
+
+        const payload = await resp.json();
+        // ⚡ Forzar PrinterName al valor del botón
+        payload.PrinterName = nombreImpresora;
+
+        console.log("Payload enviado al agente:", payload);
+
+        // 2) Enviar al agente VB
+        const r2 = await fetch("http://127.0.0.1:9666/print", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-PRINT-TOKEN": "secreto-123",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const txt = await r2.text(); // <- leemos la respuesta para debug
+        if (!r2.ok)
+            throw new Error("Agente devolvió " + r2.status + ": " + txt);
+
+        Swal.fire(
+            "✅ Éxito",
+            "Ticket enviado a: " + (nombreImpresora || "(predeterminada)"),
+            "success",
+        );
+    } catch (err) {
+        Swal.fire("❌ Error", String(err));
+    }
+});

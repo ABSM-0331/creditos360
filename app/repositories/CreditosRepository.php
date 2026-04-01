@@ -24,9 +24,15 @@ class CreditosRepository
             $this->db->beginTransaction();
 
             $esMensualFlexible = $this->esTipoFlexible((string)($datos['tipo'] ?? ''));
+            $esQuincenal = $this->esTipoQuincenal((string)($datos['tipo'] ?? ''));
 
             // 1. Calcular datos del crédito
-            $montoInteres = $datos['monto'] * ($datos['interes'] / 100);
+            if ($esQuincenal && !$esMensualFlexible) {
+                $mesesDuracion = $datos['pagos'] / 2;
+                $montoInteres = ($datos['monto'] * ($datos['interes'] / 100)) * $mesesDuracion;
+            } else {
+                $montoInteres = $datos['monto'] * ($datos['interes'] / 100);
+            }
             $totalPagar = $datos['monto'] + $montoInteres;
             $capitalBase = $datos['monto'] / $datos['pagos'];
             $interesBase = $montoInteres / $datos['pagos'];
@@ -162,6 +168,11 @@ class CreditosRepository
                 'mensaje' => 'Error al guardar crédito: ' . $e->getMessage()
             ];
         }
+    }
+
+    private function esTipoQuincenal(string $tipo): bool
+    {
+        return strtolower(trim($tipo)) === 'quincenal';
     }
 
     /**

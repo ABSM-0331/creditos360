@@ -347,7 +347,12 @@ if (!function_exists('formatearTipoCreditoTexto')) {
 
                 if (($config['modo'] ?? 'fijo') == 'fijo') {
 
-                    $montoInteres = round($monto * ($interes / 100), 2);
+                    if (strtolower(trim((string)$tipo)) === 'quincenal') {
+                        $mesesDuracion = $pagos / 2;
+                        $montoInteres = round(($monto * ($interes / 100)) * $mesesDuracion, 2);
+                    } else {
+                        $montoInteres = round($monto * ($interes / 100), 2);
+                    }
                     $totalPagar  = round($monto + $montoInteres, 2);
 
                     $capitalBase = round($monto / $pagos, 2);
