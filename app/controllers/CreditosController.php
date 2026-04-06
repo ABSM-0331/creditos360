@@ -675,7 +675,8 @@ class CreditosController
             header('Content-Type: application/json');
             echo json_encode([
                 'success' => true,
-                'mensaje' => 'Ticket enviado a la impresora térmica correctamente',
+                'mensaje' => 'Payload de impresión generado correctamente',
+                'payload' => $resultadoImpresion['payload'] ?? null,
             ]);
         } catch (Throwable $e) {
             header('Content-Type: application/json');

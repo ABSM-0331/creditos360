@@ -1,8 +1,5 @@
 <?php
 
-use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
-use Mike42\Escpos\Printer;
-
 class TicketPrinterService
 {
     public function imprimirCobro(array $cobro): array
@@ -32,115 +29,10 @@ class TicketPrinterService
                 }
             }
 
-            $nombreImpresora = $this->obtenerNombreImpresoraActiva();
-            $connector = new WindowsPrintConnector($nombreImpresora);
-            $printer = new Printer($connector);
-
-            // Helpers
-            $linea = function ($izq, $der = "") {
-                $izq = substr($izq, 0, 22);
-                $der = substr($der, 0, 10);
-                return str_pad($izq, 22) . str_pad($der, 10, " ", STR_PAD_LEFT) . "\n";
-            };
-
-            $envolver = function ($texto, $ancho = 32) {
-                $limpio = trim(preg_replace('/\s+/', ' ', (string)$texto));
-                if ($limpio === '') {
-                    return [];
-                }
-                return explode("\n", wordwrap($limpio, $ancho, "\n", true));
-            };
-
-            $center = function ($text) {
-                $text = substr($text, 0, 32);
-                $spaces = floor((32 - strlen($text)) / 2);
-                return str_repeat(" ", $spaces) . $text . "\n";
-            };
-
-            $sep = function () {
-                return str_repeat("-", 32) . "\n";
-            };
-
-            // Datos
-            $nombreEmpresa = $empresa['nombre_empresa'] ?? 'GestionPro';
-            $representante = $empresa['representante_legal'] ?? '';
-            $rfc = $empresa['rfc'] ?? '';
-            $direccion = $empresa['direccion'] ?? '';
-            $telefono = $empresa['telefono'] ?? '';
-
-            $numeroRecibo = $cobro['numero_recibo'] ?? 'N/A';
-            $fecha = $this->formatearFecha($cobro['fecha'] ?? date('Y-m-d'));
-            $cliente = $cobro['cliente']['nombre'] ?? 'N/A';
-            $cobrador = $cobro['cobrador'] ?? 'N/A';
-
-            $pagos = $cobro['pagos'] ?? [];
-            $montoPagado = (float)($cobro['resumen']['total_cobrado'] ?? 0);
-            $capital = (float)($cobro['resumen']['total_programado'] ?? 0);
-            $interes = (float)($cobro['resumen']['total_moratorio'] ?? 0);
-            $saldoRestante = (float)($cobro['credito']['saldo_pendiente_momento'] ?? ($cobro['credito']['saldo_pendiente'] ?? 0));
-
-            // ======= IMPRESIÓN =======
-
-            // Encabezado
-            $printer->setJustification(Printer::JUSTIFY_CENTER);
-            $printer->text($center($nombreEmpresa));
-            if ($representante) $printer->text($center("Rep: $representante"));
-            if ($rfc) $printer->text($center("RFC: $rfc"));
-            if ($direccion) $printer->text($center($direccion));
-            if ($telefono) $printer->text($center("Tel: $telefono"));
-
-            $printer->text($sep());
-            $printer->text($center("RECIBO DE PAGO"));
-            $printer->text($sep());
-
-            // Datos generales
-            $printer->setJustification(Printer::JUSTIFY_LEFT);
-            $printer->text($linea("Recibo:", $numeroRecibo));
-            $printer->text($linea("Fecha:", $fecha));
-            $printer->text("Cliente:\n");
-            foreach ($envolver($cliente, 32) as $lineaCliente) {
-                $printer->text($lineaCliente . "\n");
-            }
-            $printer->text("Cobrador:\n");
-            foreach ($envolver($cobrador, 32) as $lineaCobrador) {
-                $printer->text($lineaCobrador . "\n");
-            }
-
-            $printer->text($sep());
-
-            // Pagos
-            $printer->text("Letras cobradas:\n");
-
-            foreach ($pagos as $pago) {
-                $numeroPago = $pago['numero_pago'] ?? 0;
-                $fechaPago = $this->formatearFecha($pago['fecha_programada'] ?? '');
-                $monto = number_format((float)($pago['monto_pagado'] ?? 0), 2);
-
-                $texto = "L#$numeroPago $fechaPago";
-                $printer->text($linea($texto, "$$monto"));
-            }
-
-            $printer->text($sep());
-
-            // Totales
-            $printer->text($linea("Monto pagado:", "$" . $this->money($montoPagado)));
-            $printer->text($linea("Capital:", "$" . $this->money($capital)));
-            $printer->text($linea("Interes:", "$" . $this->money($interes)));
-
-            $printer->text($sep());
-
-            $printer->text($linea("Saldo restante:", "$" . $this->money($saldoRestante)));
-
-            $printer->text($sep());
-
-            // Footer
-            $printer->setJustification(Printer::JUSTIFY_CENTER);
-            $printer->text("Gracias por su pago\n\n");
-
-            $printer->cut();
-            $printer->close();
-
-            return ['ok' => true];
+            return [
+                'ok' => true,
+                'payload' => $this->construirPayloadImpresion($cobro, $empresa),
+            ];
         } catch (Throwable $e) {
             return [
                 'ok' => false,
@@ -202,44 +94,7 @@ class TicketPrinterService
             $detallePagos .= '<div class="row row-pago"><span>Letra #' . $numeroPago . ' (' . $fechaPagoProgramada . ')</span><span class="value">$' . $this->money($montoPagoItem) . '</span></div>';
         }
 
-        $lineasImpresion = [];
-        if (!empty($empresa['direccion'])) {
-            $lineasImpresion[] = (string)$empresa['direccion'];
-        }
-        if (!empty($empresa['telefono'])) {
-            $lineasImpresion[] = 'Tel: ' . (string)$empresa['telefono'];
-        }
-        $lineasImpresion[] = '';
-        $lineasImpresion[] = 'Recibo: ' . (string)($cobro['numero_recibo'] ?? 'N/A');
-        $lineasImpresion[] = 'Fecha: ' . $this->formatearFecha((string)($cobro['fecha'] ?? date('Y-m-d')));
-        $lineasImpresion[] = 'Cliente: ' . (string)($cobro['cliente']['nombre'] ?? 'N/A');
-        $lineasImpresion[] = 'Cobratario: ' . (string)($cobro['cobrador'] ?? 'N/A');
-        $lineasImpresion[] = str_repeat('-', 32);
-        $lineasImpresion[] = 'Letras cobradas: ' . (string)$cantidadPagos;
-
-        foreach ($pagos as $pago) {
-            $numeroPago = (int)($pago['numero_pago'] ?? 0);
-            $fechaPago = $this->formatearFecha((string)($pago['fecha_programada'] ?? ''));
-            $montoItem = number_format((float)($pago['monto_pagado'] ?? 0), 2, '.', ',');
-            $lineasImpresion[] = 'L#' . $numeroPago . ' ' . $fechaPago . ' $' . $montoItem;
-        }
-
-        $lineasImpresion[] = str_repeat('-', 32);
-        $lineasImpresion[] = 'Monto pagado: $' . $this->money($montoPagado);
-        $lineasImpresion[] = 'Capital: $' . $this->money($capital);
-        $lineasImpresion[] = 'Interes moratorio: $' . $this->money($interes);
-        $lineasImpresion[] = 'Saldo restante: $' . $this->money($saldoRestante);
-        $lineasImpresion[] = str_repeat('-', 32);
-        $lineasImpresion[] = 'Gracias por su pago';
-
-        $payloadImpresion = [
-            'Title' => (string)($empresa['nombre_empresa'] ?? 'Ticket de Cobro'),
-            'Lines' => $lineasImpresion,
-            'Cut' => true,
-            'PaperWidthPx' => 200,
-            'FontName' => 'Consolas',
-            'FontSize' => 7,
-        ];
+        $payloadImpresion = $this->construirPayloadImpresion($cobro, $empresa);
 
         $htmlLogo = $logoUrl !== ''
             ? '<img class="logo" src="' . $this->esc($logoUrl) . '" alt="Logo">'
@@ -523,28 +378,8 @@ class TicketPrinterService
                         }
 
                         window.alert(data.mensaje || "Ticket enviado a impresora.");
-                    } catch (errorAgente) {
-                        try {
-                            const formData = new FormData();
-                            formData.append("idcredito", ' . (int)$idCredito . ');
-                            formData.append("historial", ' . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');
-
-                            const response = await fetch("/proyecto-residencia/public/creditos/imprimir-ticket", {
-                                method: "POST",
-                                body: formData,
-                            });
-
-                            const data = await response.json();
-                            if (!response.ok || !data.success) {
-                                throw new Error(data.error || "No se pudo imprimir en la impresora térmica.");
-                            }
-
-                            window.alert(data.mensaje || "Ticket enviado a impresora térmica.");
-                        } catch (errorBackend) {
-                            throw new Error(errorBackend.message || errorAgente.message || "Error desconocido");
-                        }
                     } catch (error) {
-                        window.alert("Error al imprimir ticket: " + (error.message || "Error desconocido"));
+                        window.alert("Error al imprimir ticket: " + (error.message || "No se pudo conectar con el agente local de impresión."));
                     } finally {
                         if (btn) {
                             btn.disabled = false;
@@ -601,6 +436,162 @@ class TicketPrinterService
             </script>
         </body>
         </html>';
+    }
+
+    private function construirPayloadImpresion(array $cobro, array $empresa): array
+    {
+        $anchoTicket = 32;
+
+        $linea = static function (string $izq, string $der = '', int $ancho = 32): string {
+            $izq = trim(preg_replace('/\s+/', ' ', $izq));
+            $der = trim(preg_replace('/\s+/', ' ', $der));
+
+            if ($der === '') {
+                return substr($izq, 0, $ancho);
+            }
+
+            $maxDer = min(10, $ancho - 4);
+            $der = substr($der, 0, $maxDer);
+            $maxIzq = max(1, $ancho - strlen($der));
+            $izq = substr($izq, 0, $maxIzq);
+
+            return str_pad($izq, $maxIzq, ' ', STR_PAD_RIGHT) . $der;
+        };
+
+        $envolver = static function (string $texto, int $ancho = 32): array {
+            $texto = trim(preg_replace('/\s+/', ' ', $texto));
+            if ($texto === '') {
+                return [];
+            }
+
+            return explode("\n", wordwrap($texto, $ancho, "\n", true));
+        };
+
+        $centrar = static function (string $texto, int $ancho = 32): string {
+            $texto = trim(preg_replace('/\s+/', ' ', $texto));
+            if ($texto === '') {
+                return '';
+            }
+
+            $texto = substr($texto, 0, $ancho);
+            $espacios = (int)floor(($ancho - strlen($texto)) / 2);
+            return str_repeat(' ', max(0, $espacios)) . $texto;
+        };
+
+        $pagos = is_array($cobro['pagos'] ?? null) ? $cobro['pagos'] : [];
+        $primerPago = $pagos[0] ?? [];
+
+        $montoPagado = (float)($cobro['resumen']['total_cobrado'] ?? ($primerPago['monto_pagado'] ?? 0));
+        $capital = (float)($cobro['resumen']['total_programado'] ?? ($primerPago['monto_programado'] ?? 0));
+        $interes = (float)($cobro['resumen']['total_moratorio'] ?? 0);
+        $saldoRestante = (float)($cobro['credito']['saldo_pendiente_momento'] ?? ($cobro['credito']['saldo_pendiente'] ?? 0));
+        $cantidadPagos = max(1, (int)($cobro['resumen']['cantidad_pagos_cobrados'] ?? count($pagos)));
+
+        $nombreEmpresa = trim((string)($empresa['nombre_empresa'] ?? 'Ticket de Cobro'));
+        $representante = trim((string)($empresa['representante_legal'] ?? ''));
+        $rfc = trim((string)($empresa['rfc'] ?? ''));
+        $direccion = trim((string)($empresa['direccion'] ?? ''));
+        $telefono = trim((string)($empresa['telefono'] ?? ''));
+        $correo = trim((string)($empresa['correo'] ?? ''));
+
+        $lineasImpresion = [];
+        $lineasImpresion[] = $centrar($nombreEmpresa, $anchoTicket);
+        if ($representante !== '') {
+            foreach ($envolver('Rep: ' . $representante, $anchoTicket) as $lineaRep) {
+                $lineasImpresion[] = $lineaRep;
+            }
+        }
+        if ($rfc !== '') {
+            $lineasImpresion[] = $centrar('RFC: ' . $rfc, $anchoTicket);
+        }
+        if (!empty($empresa['direccion'])) {
+            foreach ($envolver($direccion, $anchoTicket) as $lineaDireccion) {
+                $lineasImpresion[] = $lineaDireccion;
+            }
+        }
+        if (!empty($empresa['telefono'])) {
+            $lineasImpresion[] = $centrar('Tel: ' . $telefono, $anchoTicket);
+        }
+        if ($correo !== '') {
+            foreach ($envolver($correo, $anchoTicket) as $lineaCorreo) {
+                $lineasImpresion[] = $centrar($lineaCorreo, $anchoTicket);
+            }
+        }
+        $lineasImpresion[] = '';
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $centrar('RECIBO DE PAGO', $anchoTicket);
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $linea('Recibo:', (string)($cobro['numero_recibo'] ?? 'N/A'), $anchoTicket);
+        $lineasImpresion[] = $linea('Fecha:', $this->formatearFecha((string)($cobro['fecha'] ?? date('Y-m-d'))), $anchoTicket);
+        foreach ($envolver('Cliente: ' . (string)($cobro['cliente']['nombre'] ?? 'N/A'), $anchoTicket) as $lineaCliente) {
+            $lineasImpresion[] = $lineaCliente;
+        }
+        foreach ($envolver('Cobratario: ' . (string)($cobro['cobrador'] ?? 'N/A'), $anchoTicket) as $lineaCobratario) {
+            $lineasImpresion[] = $lineaCobratario;
+        }
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $linea('Letras cobradas:', (string)$cantidadPagos, $anchoTicket);
+
+        foreach ($pagos as $pago) {
+            $numeroPago = (int)($pago['numero_pago'] ?? 0);
+            $fechaPago = $this->formatearFecha((string)($pago['fecha_programada'] ?? ''));
+            $montoItem = number_format((float)($pago['monto_pagado'] ?? 0), 2, '.', ',');
+            $lineasImpresion[] = $linea('Letra #' . $numeroPago . ' ' . $fechaPago, '$' . $montoItem, $anchoTicket);
+        }
+
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $linea('Monto pagado:', '$' . $this->money($montoPagado), $anchoTicket);
+        $lineasImpresion[] = $linea('Capital:', '$' . $this->money($capital), $anchoTicket);
+        $lineasImpresion[] = $linea('Interes moratorio:', '$' . $this->money($interes), $anchoTicket);
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $linea('Saldo restante:', '$' . $this->money($saldoRestante), $anchoTicket);
+        $lineasImpresion[] = str_repeat('-', $anchoTicket);
+        $lineasImpresion[] = $centrar('Gracias por su pago', $anchoTicket);
+
+        $printerName = '';
+        try {
+            $printerName = $this->obtenerNombreImpresoraActiva();
+        } catch (Throwable $e) {
+            $printerName = '';
+        }
+
+        $logoBase64 = $this->resolverLogoBase64((string)($empresa['logo_ruta'] ?? ''));
+
+        return [
+            'PrinterName' => $printerName,
+            'Title' => (string)($empresa['nombre_empresa'] ?? 'Ticket de Cobro'),
+            'Lines' => $lineasImpresion,
+            'Cut' => true,
+            'LogoBase64' => $logoBase64,
+            'PaperWidthPx' => 220,
+            'FontName' => 'Consolas',
+            'FontSize' => 8,
+        ];
+    }
+
+    private function resolverLogoBase64(string $logoRuta): ?string
+    {
+        $logoRuta = trim($logoRuta);
+        if ($logoRuta === '') {
+            return null;
+        }
+
+        $rutaAbsoluta = __DIR__ . '/../../public/' . ltrim($logoRuta, '/');
+        if (!is_file($rutaAbsoluta)) {
+            return null;
+        }
+
+        $contenido = @file_get_contents($rutaAbsoluta);
+        if ($contenido === false) {
+            return null;
+        }
+
+        $mime = @mime_content_type($rutaAbsoluta);
+        if (!is_string($mime) || $mime === '') {
+            $mime = 'image/png';
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($contenido);
     }
 
     private function esc(string $texto): string

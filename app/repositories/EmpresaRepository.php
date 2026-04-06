@@ -29,7 +29,7 @@ class EmpresaRepository
 
     public function obtenerDatos(): array
     {
-        $stmt = $this->db->prepare("SELECT * FROM datos_empresa WHERE id = 1 LIMIT 1");
+        $stmt = $this->db->prepare("SELECT * FROM datos_empresa ORDER BY id ASC LIMIT 1");
         $stmt->execute();
         $empresa = $stmt->fetch();
 
@@ -51,18 +51,38 @@ class EmpresaRepository
 
     public function guardarDatos(array $data): void
     {
+        $idExistente = $this->db->query("SELECT id FROM datos_empresa ORDER BY id ASC LIMIT 1")->fetchColumn();
+
+        if ($idExistente !== false) {
+            $sql = "UPDATE datos_empresa
+                    SET nombre_empresa = :nombre_empresa,
+                        direccion = :direccion,
+                        correo = :correo,
+                        representante_legal = :representante_legal,
+                        rfc = :rfc,
+                        telefono = :telefono,
+                        logo_ruta = :logo_ruta
+                    WHERE id = :id";
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                'id' => (int)$idExistente,
+                'nombre_empresa' => $data['nombre_empresa'],
+                'direccion' => $data['direccion'],
+                'correo' => $data['correo'],
+                'representante_legal' => $data['representante_legal'],
+                'rfc' => $data['rfc'],
+                'telefono' => $data['telefono'],
+                'logo_ruta' => $data['logo_ruta'],
+            ]);
+
+            return;
+        }
+
         $sql = "INSERT INTO datos_empresa
                 (id, nombre_empresa, direccion, correo, representante_legal, rfc, telefono, logo_ruta)
                 VALUES
-                (1, :nombre_empresa, :direccion, :correo, :representante_legal, :rfc, :telefono, :logo_ruta)
-                ON DUPLICATE KEY UPDATE
-                    nombre_empresa = VALUES(nombre_empresa),
-                    direccion = VALUES(direccion),
-                    correo = VALUES(correo),
-                    representante_legal = VALUES(representante_legal),
-                    rfc = VALUES(rfc),
-                    telefono = VALUES(telefono),
-                    logo_ruta = VALUES(logo_ruta)";
+                (1, :nombre_empresa, :direccion, :correo, :representante_legal, :rfc, :telefono, :logo_ruta)";
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
