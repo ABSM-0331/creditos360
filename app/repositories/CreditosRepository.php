@@ -175,6 +175,11 @@ class CreditosRepository
         return strtolower(trim($tipo)) === 'quincenal';
     }
 
+    private function redondearHaciaArribaPeso(float $monto): float
+    {
+        return (float)ceil(max(0, $monto));
+    }
+
     /**
      * Obtener objeto DateInterval según el tipo de crédito
      */
@@ -373,6 +378,129 @@ class CreditosRepository
     }
 
     /**
+     * Obtener avance de cobranza por cobratario para un rango de fechas.
+     * Si no se envían IDs, regresa todos los cobratarios.
+     */
+    public function obtenerAvanceCobrosCobratarios(string $fechaInicio, string $fechaFin, array $idsCobratario = []): array
+    {
+        $idsCobratario = array_values(array_unique(array_filter(array_map('intval', $idsCobratario), static fn(int $id): bool => $id > 0)));
+
+        $filtroCobratarioResumen = '';
+        $filtroCobratarioDetalle = '';
+        $paramsBase = [
+            ':fecha_inicio' => $fechaInicio,
+            ':fecha_fin' => $fechaFin,
+        ];
+        $paramsResumen = $paramsBase;
+        $paramsDetalle = $paramsBase;
+
+        if (!empty($idsCobratario)) {
+            $placeholders = [];
+            foreach ($idsCobratario as $index => $idCobratario) {
+                $key = ':idcob_' . $index;
+                $placeholders[] = $key;
+                $paramsResumen[$key] = $idCobratario;
+                $paramsDetalle[$key] = $idCobratario;
+            }
+
+            $inClause = implode(', ', $placeholders);
+            $filtroCobratarioResumen = " AND c.idcobratario IN ($inClause)";
+            $filtroCobratarioDetalle = " AND c.idcobratario IN ($inClause)";
+        }
+
+        $sqlResumen = "SELECT
+                            c.idcobratario,
+                            COALESCE(CONCAT(cob.ap_paterno, ' ', cob.ap_materno, ' ', cob.nombres), 'Sin cobratario') AS cobratario,
+                            COUNT(hp.idhistorial) AS cobros_realizados,
+                            COALESCE(SUM(hp.monto_pagado), 0) AS monto_total,
+                            COALESCE(SUM(hp.interes_moratorio), 0) AS moratorio_total
+                        FROM historial_pagos hp
+                        INNER JOIN creditos c ON c.idcredito = hp.idcredito
+                        LEFT JOIN personas cob ON cob.idpersona = c.idcobratario
+                        WHERE hp.fecha_pago BETWEEN :fecha_inicio AND :fecha_fin
+                        $filtroCobratarioResumen
+                        GROUP BY c.idcobratario, cob.ap_paterno, cob.ap_materno, cob.nombres
+                        ORDER BY monto_total DESC";
+
+        $stmtResumen = $this->db->prepare($sqlResumen);
+        $stmtResumen->execute($paramsResumen);
+        $resumenPorCobratario = $stmtResumen->fetchAll();
+
+        $sqlDetalle = "SELECT
+                            hp.idhistorial,
+                            hp.fecha_pago,
+                            hp.monto_pagado,
+                            hp.interes_moratorio,
+                            hp.metodo_pago,
+                            hp.idcredito,
+                            pc.numero_pago,
+                            pc.fecha_programada,
+                            c.idcobratario,
+                            c.tipo,
+                            COALESCE(CONCAT(cob.ap_paterno, ' ', cob.ap_materno, ' ', cob.nombres), 'Sin cobratario') AS cobratario,
+                            CONCAT(cli.ap_paterno, ' ', cli.ap_materno, ' ', cli.nombres) AS cliente
+                        FROM historial_pagos hp
+                        INNER JOIN creditos c ON c.idcredito = hp.idcredito
+                        INNER JOIN pagos_credito pc ON pc.idpago = hp.idpago
+                        INNER JOIN personas cli ON cli.idpersona = c.idcliente
+                        LEFT JOIN personas cob ON cob.idpersona = c.idcobratario
+                        WHERE hp.fecha_pago BETWEEN :fecha_inicio AND :fecha_fin
+                        $filtroCobratarioDetalle
+                        ORDER BY hp.fecha_pago DESC, hp.idhistorial DESC";
+
+        $stmtDetalle = $this->db->prepare($sqlDetalle);
+        $stmtDetalle->execute($paramsDetalle);
+        $detalleCobros = $stmtDetalle->fetchAll();
+
+        $totales = [
+            'cobros_realizados' => 0,
+            'monto_total' => 0.0,
+            'moratorio_total' => 0.0,
+            'cobratarios_con_movimiento' => count($resumenPorCobratario),
+        ];
+
+        foreach ($resumenPorCobratario as $fila) {
+            $totales['cobros_realizados'] += (int)($fila['cobros_realizados'] ?? 0);
+            $totales['monto_total'] += (float)($fila['monto_total'] ?? 0);
+            $totales['moratorio_total'] += (float)($fila['moratorio_total'] ?? 0);
+        }
+
+        $totales['monto_total'] = round($totales['monto_total'], 2);
+        $totales['moratorio_total'] = round($totales['moratorio_total'], 2);
+
+        return [
+            'resumen' => $resumenPorCobratario,
+            'detalle' => $detalleCobros,
+            'totales' => $totales,
+        ];
+    }
+
+    public function obtenerRangoFechasHistorialPagos(): array
+    {
+        $sql = "SELECT MIN(fecha_pago) AS fecha_inicio, MAX(fecha_pago) AS fecha_fin FROM historial_pagos";
+        $stmt = $this->db->query($sql);
+        $row = $stmt ? $stmt->fetch() : [];
+
+        return [
+            'fecha_inicio' => (string)($row['fecha_inicio'] ?? date('Y-m-d')),
+            'fecha_fin' => (string)($row['fecha_fin'] ?? date('Y-m-d')),
+        ];
+    }
+
+    public function contarCobrosEnRango(string $fechaInicio, string $fechaFin): int
+    {
+        $sql = "SELECT COUNT(*) AS total FROM historial_pagos WHERE fecha_pago BETWEEN :fecha_inicio AND :fecha_fin";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':fecha_inicio' => $fechaInicio,
+            ':fecha_fin' => $fechaFin,
+        ]);
+
+        $row = $stmt->fetch();
+        return (int)($row['total'] ?? 0);
+    }
+
+    /**
      * Registrar cobro de una cuota para cobratario
      */
     public function cobrarPagoCobratario(int $idPago, int $idCredito, int $idCobratario, float $montoRecibido, ?int $idUsuarioCobrador = null, bool $confirmarAnticipado = false, bool $esAdmin = false, string $metodoPago = 'efectivo'): array
@@ -455,9 +583,9 @@ class CreditosRepository
                     $hoy,
                     (string)($pago['estado'] ?? 'pendiente')
                 );
-                $montoBase = (float)$pago['monto_programado'] + $recargoMoratorio;
+                $montoBase = $this->redondearHaciaArribaPeso((float)$pago['monto_programado'] + $recargoMoratorio);
                 if ($esMensualFlexible) {
-                    $montoBase += $abonoCapital;
+                    $montoBase = $this->redondearHaciaArribaPeso($montoBase + $abonoCapital);
                 }
                 $montoCobro += $montoBase;
             }
@@ -514,13 +642,13 @@ class CreditosRepository
                     $hoy,
                     (string)($pago['estado'] ?? 'pendiente')
                 );
-                $montoPago = (float)$pago['monto_programado'] + $recargoMoratorio;
+                $montoPago = $this->redondearHaciaArribaPeso((float)$pago['monto_programado'] + $recargoMoratorio);
                 $esAnticipado = (new DateTime($pago['fecha_programada'])) > $hoy;
 
                 $abonoCapitalPago = 0.0;
                 if ($this->esTipoFlexible((string)($pago['tipo'] ?? ''))) {
                     $abonoCapitalPago = $abonoCapital;
-                    $montoPago += $abonoCapitalPago;
+                    $montoPago = $this->redondearHaciaArribaPeso($montoPago + $abonoCapitalPago);
 
                     $saldoCapitalActual = (float)$pago['saldo_vivo'];
                     $saldoCapitalRestante = max(0, round($saldoCapitalActual - $abonoCapitalPago, 2));
@@ -1071,6 +1199,56 @@ class CreditosRepository
         }
 
         return $configuraciones;
+    }
+
+    /**
+     * Obtener estadísticas para el dashboard admin
+     */
+    public function obtenerEstadisticasDashboard(): array
+    {
+        try {
+            // Total de clientes (rol=2)
+            $sqlClientes = "SELECT COUNT(*) as total FROM personas WHERE idrol = 2";
+            $stmtClientes = $this->db->query($sqlClientes);
+            $totalClientes = (int)(($stmtClientes ? $stmtClientes->fetch()['total'] : 0) ?? 0);
+
+            // Total de cobratarios (rol=3)
+            $sqlCobratarios = "SELECT COUNT(*) as total FROM personas WHERE idrol = 3";
+            $stmtCobratarios = $this->db->query($sqlCobratarios);
+            $totalCobratarios = (int)(($stmtCobratarios ? $stmtCobratarios->fetch()['total'] : 0) ?? 0);
+
+            // Total cobrado HOY (suma de pagos realizados hoy)
+            $hoyStr = date('Y-m-d');
+            $sqlCobroHoy = "SELECT COALESCE(SUM(monto_pagado), 0) as total 
+                           FROM historial_pagos 
+                               WHERE DATE(fecha_pago) = :hoy";
+            $stmtCobroHoy = $this->db->prepare($sqlCobroHoy);
+            $stmtCobroHoy->execute([':hoy' => $hoyStr]);
+            $cobroHoy = (float)(($stmtCobroHoy->fetch()['total'] ?? 0) ?: 0);
+
+            // Cobros pendientes HOY (pagos programados para hoy y no pagados)
+            $sqlCobrosPendientes = "SELECT COUNT(*) as total 
+                                  FROM pagos_credito 
+                                  WHERE DATE(fecha_programada) = :hoy 
+                                    AND estado = 'pendiente'";
+            $stmtCobrosPendientes = $this->db->prepare($sqlCobrosPendientes);
+            $stmtCobrosPendientes->execute([':hoy' => $hoyStr]);
+            $cobrosPendientesHoy = (int)(($stmtCobrosPendientes->fetch()['total'] ?? 0) ?? 0);
+
+            return [
+                'totalClientes' => $totalClientes,
+                'totalCobratarios' => $totalCobratarios,
+                'cobroHoy' => round($cobroHoy, 2),
+                'cobrosPendientesHoy' => $cobrosPendientesHoy,
+            ];
+        } catch (Throwable $e) {
+            return [
+                'totalClientes' => 0,
+                'totalCobratarios' => 0,
+                'cobroHoy' => 0.0,
+                'cobrosPendientesHoy' => 0,
+            ];
+        }
     }
 
     private function esTipoFlexible(string $tipo): bool

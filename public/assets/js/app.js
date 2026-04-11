@@ -1,110 +1,50 @@
-// // ===== DOM Elements =====
-// const sidebar = document.querySelector(".sidebar");
-// const menuToggle = document.getElementById("menuToggle");
-// const navLinks = document.querySelectorAll(".nav-link");
-// const contentSections = document.querySelectorAll(".content-section");
-// const pageTitle = document.getElementById("pageTitle");
+const THEME_STORAGE_KEY = "gp_theme";
 
-// // ===== Sidebar Toggle (Mobile) =====
-// menuToggle.addEventListener("click", () => {
-//     sidebar.classList.toggle("open");
+function aplicarTema(theme) {
+    const resolvedTheme = theme === "light" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", resolvedTheme);
 
-//     // Toggle overlay
-//     let overlay = document.querySelector(".sidebar-overlay");
-//     if (!overlay) {
-//         overlay = document.createElement("div");
-//         overlay.className = "sidebar-overlay";
-//         document.body.appendChild(overlay);
+    const toggle = document.getElementById("themeToggle");
+    if (toggle) {
+        const siguiente = resolvedTheme === "light" ? "oscuro" : "claro";
+        toggle.setAttribute("aria-label", `Cambiar a modo ${siguiente}`);
+        toggle.setAttribute("title", `Cambiar a modo ${siguiente}`);
+    }
+}
 
-//         overlay.addEventListener("click", () => {
-//             sidebar.classList.remove("open");
-//             overlay.classList.remove("active");
-//         });
-//     }
+function inicializarTema() {
+    let storedTheme = "dark";
+    try {
+        const saved = localStorage.getItem(THEME_STORAGE_KEY);
+        if (saved === "light" || saved === "dark") {
+            storedTheme = saved;
+        }
+    } catch (error) {
+        storedTheme = "dark";
+    }
 
-//     overlay.classList.toggle("active");
-// });
+    aplicarTema(storedTheme);
 
-// // ===== Navigation =====
-// navLinks.forEach((link) => {
-//     link.addEventListener("click", (e) => {
-//         e.preventDefault();
+    const toggle = document.getElementById("themeToggle");
+    if (!toggle) {
+        return;
+    }
 
-//         const section = link.dataset.section;
+    toggle.addEventListener("click", function () {
+        const actual =
+            document.documentElement.getAttribute("data-theme") === "light"
+                ? "light"
+                : "dark";
+        const siguiente = actual === "light" ? "dark" : "light";
 
-//         // Update active nav link
-//         navLinks.forEach((l) => l.classList.remove("active"));
-//         link.classList.add("active");
+        aplicarTema(siguiente);
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, siguiente);
+        } catch (error) {}
+    });
+}
 
-//         // Show corresponding section
-//         contentSections.forEach((s) => s.classList.remove("active"));
-//         document.getElementById(section).classList.add("active");
-
-//         // Update page title
-//         const titles = {
-//             dashboard: "Dashboard",
-//             clientes: "Catálogo de Clientes",
-//             cobratarios: "Catálogo de Cobratarios",
-//         };
-//         pageTitle.textContent = titles[section] || "Dashboard";
-
-//         // Close sidebar on mobile
-//         if (window.innerWidth <= 768) {
-//             sidebar.classList.remove("open");
-//             const overlay = document.querySelector(".sidebar-overlay");
-//             if (overlay) overlay.classList.remove("active");
-//         }
-//     });
-// });
-
-// // ===== Window Resize Handler =====
-// window.addEventListener("resize", () => {
-//     if (window.innerWidth > 768) {
-//         sidebar.classList.remove("open");
-//         const overlay = document.querySelector(".sidebar-overlay");
-//         if (overlay) overlay.classList.remove("active");
-//     }
-// });
-
-// // ===== Search Functionality (Placeholder) =====
-// const searchInputs = document.querySelectorAll(".search-bar input");
-// searchInputs.forEach((input) => {
-//     input.addEventListener("input", (e) => {
-//         const searchTerm = e.target.value.toLowerCase();
-//         console.log("Buscando:", searchTerm);
-//         // Aquí puedes implementar la lógica de búsqueda
-//     });
-// });
-
-// // ===== Button Click Handlers (Placeholders) =====
-// document.querySelectorAll(".btn-primary").forEach((btn) => {
-//     btn.addEventListener("click", () => {
-//         alert("Función de agregar nuevo registro - Por implementar");
-//     });
-// });
-
-// document.querySelectorAll('.btn-icon[title="Editar"]').forEach((btn) => {
-//     btn.addEventListener("click", () => {
-//         alert("Función de editar - Por implementar");
-//     });
-// });
-
-// document.querySelectorAll('.btn-icon[title="Eliminar"]').forEach((btn) => {
-//     btn.addEventListener("click", () => {
-//         if (confirm("¿Estás seguro de que deseas eliminar este registro?")) {
-//             alert("Función de eliminar - Por implementar");
-//         }
-//     });
-// });
-
-// document.querySelectorAll(".person-actions .btn-secondary").forEach((btn) => {
-//     btn.addEventListener("click", () => {
-//         alert("Ver detalles - Por implementar");
-//     });
-// });
-
-// // ===== Initialize =====
-// console.log("Aplicación de Gestión inicializada");
+document.addEventListener("DOMContentLoaded", inicializarTema);
 
 // ===== Sidebar responsive (tablet/mobile) =====
 document.addEventListener("DOMContentLoaded", function () {
@@ -358,61 +298,3 @@ function cargarMunicipios(idestado, selectElement) {
             });
         });
 }
-const boton = document.querySelector(".btn-testear");
-
-boton.addEventListener("click", async function () {
-    console.log("Botón de testear ticket clickeado");
-    const nombreImpresora = "POS58";
-    const rutaLogo =
-        "uploads/empresa/empresa_69bec366ba1ea8.67900912_logo.jpeg";
-    try {
-        // 1) Pedir a PHP que construya el ticket
-        const resp = await fetch(
-            "http://localhost:81/proyecto-residencia/public/test",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: new URLSearchParams({
-                    impresora: nombreImpresora,
-                    ruta_img: rutaLogo,
-                }),
-            },
-        );
-
-        if (!resp.ok) {
-            throw new Error(
-                "PHP devolvió " + resp.status + ": " + (await resp.text()),
-            );
-        }
-
-        const payload = await resp.json();
-        // ⚡ Forzar PrinterName al valor del botón
-        payload.PrinterName = nombreImpresora;
-
-        console.log("Payload enviado al agente:", payload);
-
-        // 2) Enviar al agente VB
-        const r2 = await fetch("http://127.0.0.1:9666/print", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-PRINT-TOKEN": "secreto-123",
-            },
-            body: JSON.stringify(payload),
-        });
-
-        const txt = await r2.text(); // <- leemos la respuesta para debug
-        if (!r2.ok)
-            throw new Error("Agente devolvió " + r2.status + ": " + txt);
-
-        Swal.fire(
-            "✅ Éxito",
-            "Ticket enviado a: " + (nombreImpresora || "(predeterminada)"),
-            "success",
-        );
-    } catch (err) {
-        Swal.fire("❌ Error", String(err));
-    }
-});

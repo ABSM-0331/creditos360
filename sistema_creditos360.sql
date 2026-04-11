@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 21-03-2026 a las 17:19:25
+-- Tiempo de generación: 11-04-2026 a las 02:07:46
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.2.12
 
@@ -18,50 +18,8 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Base de datos: `sistema_creditos360`
+-- Base de datos: `crediox`
 --
-
--- --------------------------------------------------------
-
---
--- Estructura de tabla para la tabla `impresoras`
---
-
-CREATE TABLE `impresoras` (
-  `idimpresora` int(11) NOT NULL,
-  `nombre` varchar(150) NOT NULL,
-  `activa` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Estructura de tabla para la tabla `tipos_credito`
---
-
-CREATE TABLE `tipos_credito` (
-  `idtipo` int(11) NOT NULL,
-  `tipo` varchar(50) NOT NULL,
-  `cantidad_pagos` int(11) NOT NULL,
-  `interes_default` decimal(5,2) NOT NULL,
-  `dias_intervalo` int(11) NOT NULL DEFAULT 1,
-  `es_flexible` tinyint(1) NOT NULL DEFAULT 0,
-  `activo` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` timestamp NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `tipos_credito`
---
-
-INSERT INTO `tipos_credito` (`idtipo`, `tipo`, `cantidad_pagos`, `interes_default`, `dias_intervalo`, `es_flexible`, `activo`, `created_at`, `updated_at`) VALUES
-(1, 'diario', 35, 22.50, 1, 0, 1, current_timestamp(), current_timestamp()),
-(2, 'semanal', 12, 50.00, 7, 0, 1, current_timestamp(), current_timestamp()),
-(3, 'quincenal', 6, 30.00, 15, 0, 1, current_timestamp(), current_timestamp()),
-(4, 'mensual', 3, 50.00, 30, 1, 1, current_timestamp(), current_timestamp());
 
 -- --------------------------------------------------------
 
@@ -93,8 +51,8 @@ CREATE TABLE `creditos` (
 --
 
 INSERT INTO `creditos` (`idcredito`, `idcliente`, `idcobratario`, `monto`, `tipo`, `interes`, `moratorio`, `cantidad_pagos`, `fecha_inicio`, `fecha_fin`, `total_pagos`, `total_pagado`, `saldo_pendiente`, `estado`, `fecha_creacion`, `fecha_actualizacion`) VALUES
-(1, 15, NULL, 10000.00, 'diario', 22.50, 35.00, 35, '2026-02-26', '2026-04-01', 12250.00, 0.00, 12250.00, 'activo', '2026-02-26 02:58:14', '2026-02-26 02:58:14'),
-(2, 15, 17, 10000.00, 'diario', 22.50, 35.00, 35, '2026-02-26', '2026-04-01', 12250.00, 11830.00, 4200.00, 'activo', '2026-02-26 03:05:51', '2026-03-20 20:17:55'),
+(1, 15, 17, 10000.00, 'diario', 22.50, 35.00, 35, '2026-02-26', '2026-04-01', 12250.00, 15190.00, 9100.00, 'activo', '2026-02-26 02:58:14', '2026-04-10 23:57:46'),
+(2, 15, 17, 10000.00, 'diario', 22.50, 35.00, 35, '2026-02-26', '2026-04-01', 12250.00, 21245.00, 0.00, 'completado', '2026-02-26 03:05:51', '2026-04-09 16:20:21'),
 (3, 16, 17, 10000.00, 'semanal', 50.00, 125.00, 12, '2026-02-26', '2026-05-14', 15000.00, 15375.00, 0.00, 'completado', '2026-02-26 03:38:05', '2026-03-20 20:14:40');
 
 -- --------------------------------------------------------
@@ -121,7 +79,7 @@ CREATE TABLE `datos_empresa` (
 --
 
 INSERT INTO `datos_empresa` (`id`, `nombre_empresa`, `direccion`, `correo`, `representante_legal`, `rfc`, `telefono`, `logo_ruta`, `created_at`, `updated_at`) VALUES
-(1, 'creditos 360', 'c 22 * 15 #43', 'empresa@gmail.com', 'rudy rafid yam pacab', 'XAXX010101000', '123654789', 'uploads/empresa/empresa_69bec366ba1ea8.67900912_logo.jpeg', '2026-03-17 21:14:33', '2026-03-21 16:12:22');
+(1, 'creditos 360', 'c 22 * 15 #43 23', 'empresa@gmail.com', 'rudy rafid yam pacab', 'XAXX010101000', '123654789', 'uploads/empresa/empresa_69bec366ba1ea8.67900912_logo.jpeg', '2026-03-17 21:14:33', '2026-04-05 21:48:03');
 
 -- --------------------------------------------------------
 
@@ -234,7 +192,28 @@ INSERT INTO `historial_pagos` (`idhistorial`, `idpago`, `idcredito`, `fecha_pago
 (32, 55, 2, '2026-03-20', 455.00, 105.00, 1, 'GC2026032021175592A80B7D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-03-20 20:17:55'),
 (33, 56, 2, '2026-03-20', 420.00, 70.00, 1, 'GC2026032021175592A80B7D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-03-20 20:17:55'),
 (34, 57, 2, '2026-03-20', 385.00, 35.00, 1, 'GC2026032021175592A80B7D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-03-20 20:17:55'),
-(35, 58, 2, '2026-03-20', 350.00, 0.00, 1, 'GC2026032021175592A80B7D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-03-20 20:17:55');
+(35, 58, 2, '2026-03-20', 350.00, 0.00, 1, 'GC2026032021175592A80B7D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-03-20 20:17:55'),
+(36, 59, 2, '2026-04-06', 910.00, 560.00, 15, 'GC2026040618251275463BBA', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-06 16:25:12'),
+(37, 60, 2, '2026-04-06', 875.00, 525.00, 15, 'GC202604061833174A0B885E', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-06 16:33:17'),
+(38, 61, 2, '2026-04-06', 840.00, 490.00, 15, 'GC2026040619352269B87AFA', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-06 17:35:22'),
+(39, 62, 2, '2026-04-06', 805.00, 455.00, 15, 'GC20260406193551CC639FC4', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-06 17:35:51'),
+(40, 63, 2, '2026-04-08', 840.00, 490.00, 15, 'GC202604081816169F3666E0', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-08 16:16:16'),
+(41, 64, 2, '2026-04-09', 840.00, 490.00, 1, 'GC20260409181854C932956D', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:18:54'),
+(42, 65, 2, '2026-04-09', 805.00, 455.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(43, 66, 2, '2026-04-09', 770.00, 420.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(44, 67, 2, '2026-04-09', 735.00, 385.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(45, 68, 2, '2026-04-09', 700.00, 350.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(46, 69, 2, '2026-04-09', 665.00, 315.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(47, 70, 2, '2026-04-09', 630.00, 280.00, 1, 'GC2026040918202152A84B2B', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:20:21'),
+(48, 1, 1, '2026-04-09', 1820.00, 1470.00, 1, 'GC20260409182445D8D7E1CB', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:24:45'),
+(49, 2, 1, '2026-04-09', 1785.00, 1435.00, 1, 'GC20260409182445D8D7E1CB', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:24:45'),
+(50, 3, 1, '2026-04-09', 1750.00, 1400.00, 1, 'GC20260409182654DD1E12B8', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:26:54'),
+(51, 4, 1, '2026-04-09', 1715.00, 1365.00, 1, 'GC20260409182654DD1E12B8', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:26:54'),
+(52, 5, 1, '2026-04-09', 1680.00, 1330.00, 1, 'GC20260409182654DD1E12B8', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 16:26:54'),
+(53, 6, 1, '2026-04-09', 1645.00, 1295.00, 1, 'GC20260409192148CC6E19C4', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 17:21:48'),
+(54, 7, 1, '2026-04-09', 1610.00, 1260.00, 1, 'GC20260409192422030A8D13', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-09 17:24:22'),
+(55, 8, 1, '2026-04-10', 1610.00, 1260.00, 15, 'GC202604110152060D0F8BE0', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-10 23:52:06'),
+(56, 9, 1, '2026-04-10', 1575.00, 1225.00, 15, 'GC2026041101574623B9A3A9', 'efectivo', NULL, 'Cobro registrado por cobratario', '2026-04-10 23:57:46');
 
 --
 -- Disparadores `historial_pagos`
@@ -269,6 +248,29 @@ CREATE TRIGGER `actualizar_saldo_credito` AFTER INSERT ON `historial_pagos` FOR 
                 END
 $$
 DELIMITER ;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `impresoras`
+--
+
+CREATE TABLE `impresoras` (
+  `idimpresora` int(11) NOT NULL,
+  `usuario_id` int(11) NOT NULL DEFAULT 0,
+  `nombre` varchar(150) NOT NULL,
+  `activa` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `impresoras`
+--
+
+INSERT INTO `impresoras` (`idimpresora`, `usuario_id`, `nombre`, `activa`, `created_at`, `updated_at`) VALUES
+(1, 15, 'POS58', 1, '2026-03-30 21:14:47', '2026-03-30 21:14:51'),
+(2, 1, 'POS58', 1, '2026-03-30 21:35:46', '2026-03-30 21:35:49');
 
 -- --------------------------------------------------------
 
@@ -2812,15 +2814,15 @@ CREATE TABLE `pagos_credito` (
 --
 
 INSERT INTO `pagos_credito` (`idpago`, `idcredito`, `numero_pago`, `fecha_programada`, `capital_programado`, `interes_programado`, `monto_programado`, `estado`, `fecha_pago_real`, `monto_pagado`, `interes_moratorio_aplicado`, `dias_atraso`, `saldo_vivo`, `observaciones`, `fecha_creacion`) VALUES
-(1, 1, 1, '2026-02-26', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 9714.29, NULL, '2026-02-26 02:58:14'),
-(2, 1, 2, '2026-02-27', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 9428.57, NULL, '2026-02-26 02:58:14'),
-(3, 1, 3, '2026-02-28', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 9142.86, NULL, '2026-02-26 02:58:14'),
-(4, 1, 4, '2026-03-01', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 8857.14, NULL, '2026-02-26 02:58:14'),
-(5, 1, 5, '2026-03-02', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 8571.43, NULL, '2026-02-26 02:58:14'),
-(6, 1, 6, '2026-03-03', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 8285.71, NULL, '2026-02-26 02:58:14'),
-(7, 1, 7, '2026-03-04', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 8000.00, NULL, '2026-02-26 02:58:14'),
-(8, 1, 8, '2026-03-05', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 7714.29, NULL, '2026-02-26 02:58:14'),
-(9, 1, 9, '2026-03-06', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 7428.57, NULL, '2026-02-26 02:58:14'),
+(1, 1, 1, '2026-02-26', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1820.00, 0.00, 0, 9714.29, NULL, '2026-02-26 02:58:14'),
+(2, 1, 2, '2026-02-27', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1785.00, 0.00, 0, 9428.57, NULL, '2026-02-26 02:58:14'),
+(3, 1, 3, '2026-02-28', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1750.00, 0.00, 0, 9142.86, NULL, '2026-02-26 02:58:14'),
+(4, 1, 4, '2026-03-01', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1715.00, 0.00, 0, 8857.14, NULL, '2026-02-26 02:58:14'),
+(5, 1, 5, '2026-03-02', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1680.00, 0.00, 0, 8571.43, NULL, '2026-02-26 02:58:14'),
+(6, 1, 6, '2026-03-03', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1645.00, 0.00, 0, 8285.71, NULL, '2026-02-26 02:58:14'),
+(7, 1, 7, '2026-03-04', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 1610.00, 0.00, 0, 8000.00, NULL, '2026-02-26 02:58:14'),
+(8, 1, 8, '2026-03-05', 285.71, 64.29, 350.00, 'pagado', '2026-04-10', 1610.00, 0.00, 0, 7714.29, NULL, '2026-02-26 02:58:14'),
+(9, 1, 9, '2026-03-06', 285.71, 64.29, 350.00, 'pagado', '2026-04-10', 1575.00, 0.00, 0, 7428.57, NULL, '2026-02-26 02:58:14'),
 (10, 1, 10, '2026-03-07', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 7142.86, NULL, '2026-02-26 02:58:14'),
 (11, 1, 11, '2026-03-08', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 6857.14, NULL, '2026-02-26 02:58:14'),
 (12, 1, 12, '2026-03-09', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 6571.43, NULL, '2026-02-26 02:58:14'),
@@ -2870,18 +2872,18 @@ INSERT INTO `pagos_credito` (`idpago`, `idcredito`, `numero_pago`, `fecha_progra
 (56, 2, 21, '2026-03-18', 285.71, 64.29, 350.00, 'pagado', '2026-03-20', 420.00, 0.00, 0, 4000.00, NULL, '2026-02-26 03:05:51'),
 (57, 2, 22, '2026-03-19', 285.71, 64.29, 350.00, 'pagado', '2026-03-20', 385.00, 0.00, 0, 3714.29, NULL, '2026-02-26 03:05:51'),
 (58, 2, 23, '2026-03-20', 285.71, 64.29, 350.00, 'pagado', '2026-03-20', 350.00, 0.00, 0, 3428.57, NULL, '2026-02-26 03:05:51'),
-(59, 2, 24, '2026-03-21', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 3142.86, NULL, '2026-02-26 03:05:51'),
-(60, 2, 25, '2026-03-22', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 2857.14, NULL, '2026-02-26 03:05:51'),
-(61, 2, 26, '2026-03-23', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 2571.43, NULL, '2026-02-26 03:05:51'),
-(62, 2, 27, '2026-03-24', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 2285.71, NULL, '2026-02-26 03:05:51'),
-(63, 2, 28, '2026-03-25', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 2000.00, NULL, '2026-02-26 03:05:51'),
-(64, 2, 29, '2026-03-26', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 1714.29, NULL, '2026-02-26 03:05:51'),
-(65, 2, 30, '2026-03-27', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 1428.57, NULL, '2026-02-26 03:05:51'),
-(66, 2, 31, '2026-03-28', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 1142.86, NULL, '2026-02-26 03:05:51'),
-(67, 2, 32, '2026-03-29', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 857.14, NULL, '2026-02-26 03:05:51'),
-(68, 2, 33, '2026-03-30', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 571.43, NULL, '2026-02-26 03:05:51'),
-(69, 2, 34, '2026-03-31', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 285.71, NULL, '2026-02-26 03:05:51'),
-(70, 2, 35, '2026-04-01', 285.71, 64.29, 350.00, 'pendiente', NULL, NULL, 0.00, 0, 0.00, NULL, '2026-02-26 03:05:51'),
+(59, 2, 24, '2026-03-21', 285.71, 64.29, 350.00, 'pagado', '2026-04-06', 910.00, 0.00, 0, 3142.86, NULL, '2026-02-26 03:05:51'),
+(60, 2, 25, '2026-03-22', 285.71, 64.29, 350.00, 'pagado', '2026-04-06', 875.00, 0.00, 0, 2857.14, NULL, '2026-02-26 03:05:51'),
+(61, 2, 26, '2026-03-23', 285.71, 64.29, 350.00, 'pagado', '2026-04-06', 840.00, 0.00, 0, 2571.43, NULL, '2026-02-26 03:05:51'),
+(62, 2, 27, '2026-03-24', 285.71, 64.29, 350.00, 'pagado', '2026-04-06', 805.00, 0.00, 0, 2285.71, NULL, '2026-02-26 03:05:51'),
+(63, 2, 28, '2026-03-25', 285.71, 64.29, 350.00, 'pagado', '2026-04-08', 840.00, 0.00, 0, 2000.00, NULL, '2026-02-26 03:05:51'),
+(64, 2, 29, '2026-03-26', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 840.00, 0.00, 0, 1714.29, NULL, '2026-02-26 03:05:51'),
+(65, 2, 30, '2026-03-27', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 805.00, 0.00, 0, 1428.57, NULL, '2026-02-26 03:05:51'),
+(66, 2, 31, '2026-03-28', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 770.00, 0.00, 0, 1142.86, NULL, '2026-02-26 03:05:51'),
+(67, 2, 32, '2026-03-29', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 735.00, 0.00, 0, 857.14, NULL, '2026-02-26 03:05:51'),
+(68, 2, 33, '2026-03-30', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 700.00, 0.00, 0, 571.43, NULL, '2026-02-26 03:05:51'),
+(69, 2, 34, '2026-03-31', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 665.00, 0.00, 0, 285.71, NULL, '2026-02-26 03:05:51'),
+(70, 2, 35, '2026-04-01', 285.71, 64.29, 350.00, 'pagado', '2026-04-09', 630.00, 0.00, 0, 0.00, NULL, '2026-02-26 03:05:51'),
 (71, 3, 1, '2026-02-26', 833.33, 416.67, 1250.00, 'pagado', '2026-03-17', 1375.00, 0.00, 0, 9166.67, NULL, '2026-02-26 03:38:05'),
 (72, 3, 2, '2026-03-05', 833.33, 416.67, 1250.00, 'pagado', '2026-03-17', 1375.00, 0.00, 0, 8333.33, NULL, '2026-02-26 03:38:05'),
 (73, 3, 3, '2026-03-12', 833.33, 416.67, 1250.00, 'pagado', '2026-03-17', 1375.00, 0.00, 0, 7500.00, NULL, '2026-02-26 03:38:05'),
@@ -2949,7 +2951,8 @@ INSERT INTO `personas` (`idpersona`, `ap_paterno`, `ap_materno`, `nombres`, `idr
 (1, 'SANTAMARIA', 'MAGAÑA', 'JORGE ANGEL', 1, 'isc.jsantamaria@gmail.com', '9971118771', 'H', '1985-11-17', 40, 'SAMJ851117HYNNGR06', 'SM', 'uploads/clientes/SAMJ851117HYNNGR06.jpg', 'calle 50', '69b', '37', '39', 'ARCADIO SANTOYO', '97880', 31, 2407, 'CASA 104 NARANJA REJAS CAFES', 1, '2025-12-19 23:05:33'),
 (15, 'sosa', 'mezeta', 'abran Benjamin', 2, 'abransosam0331@gmail.com', '9851121853', NULL, '2025-09-10', 20, 'soma030331hynszba8', '', 'uploads/clientes/6996347bdc661_pase_Sosa Mezeta (2).png', 'C 22', '43', '', '', 'tixmehuac', '97950', 31, 2386, '', 1, '2026-02-18 21:51:55'),
 (16, 'yam', 'polanco', 'arturo', 2, 'benjaminsosam@hotmail.com', '123456789', 'M', '2025-12-09', 20, 'soma030331hynszba8', '', 'uploads/clientes/699635393c450_pase_Sosa Mezeta.png', 'Calle', '22', '', '', '', '97950', 31, 2386, 'hola hola', 1, '2026-02-18 21:55:05'),
-(17, 'medina', 'porras', 'jorge', 3, 'ejemplo@gmail.com', '123456789', NULL, '2026-02-04', NULL, 'soma030331hynszba8', '', 'uploads/cobratarios/6996376f0e149_pase_Sosa Mezeta.png', 'Calle', '22', '', '', '', '97950', 31, 2386, 'hola hola hola', 1, '2026-02-18 22:04:31');
+(17, 'medina', 'porras', 'jorge', 3, 'ejemplo@gmail.com', '123456789', NULL, '2026-02-04', NULL, 'soma030331hynszba8', '', 'uploads/cobratarios/6996376f0e149_pase_Sosa Mezeta.png', 'Calle', '22', '', '', '', '97950', 31, 2386, 'hola hola hola', 1, '2026-02-18 22:04:31'),
+(18, 'hernandez', 'lopez', 'juan carlos', 3, 'abransosam0331@gmail.com', '9851124853', 'M', '2003-01-06', NULL, 'soma030331hynszba8', 'algoalgo', NULL, 'C 22', '22', '', '', 'tixmehuac', '97950', 31, 2422, 'casa turquesa', 1, '2026-04-10 23:42:49');
 
 -- --------------------------------------------------------
 
@@ -2970,6 +2973,34 @@ INSERT INTO `roles` (`idrol`, `nombre`) VALUES
 (1, 'ADMIN'),
 (2, 'CLIENTE'),
 (3, 'COBRATARIO');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `tipos_credito`
+--
+
+CREATE TABLE `tipos_credito` (
+  `idtipo` int(11) NOT NULL,
+  `tipo` varchar(50) NOT NULL,
+  `cantidad_pagos` int(11) NOT NULL,
+  `interes_default` decimal(5,2) NOT NULL,
+  `dias_intervalo` int(11) NOT NULL DEFAULT 1,
+  `es_flexible` tinyint(1) NOT NULL DEFAULT 0,
+  `activo` tinyint(1) NOT NULL DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Volcado de datos para la tabla `tipos_credito`
+--
+
+INSERT INTO `tipos_credito` (`idtipo`, `tipo`, `cantidad_pagos`, `interes_default`, `dias_intervalo`, `es_flexible`, `activo`, `created_at`, `updated_at`) VALUES
+(1, 'diario', 35, 22.50, 1, 0, 1, '2026-03-30 21:13:54', '2026-03-30 21:13:54'),
+(2, 'semanal', 12, 50.00, 7, 0, 1, '2026-03-30 21:13:54', '2026-03-30 21:13:54'),
+(3, 'quincenal', 14, 30.00, 15, 0, 1, '2026-03-30 21:13:54', '2026-03-31 17:17:01'),
+(4, 'mensual', 3, 50.00, 30, 1, 1, '2026-03-30 21:13:54', '2026-03-30 21:13:54');
 
 -- --------------------------------------------------------
 
@@ -3021,7 +3052,7 @@ CREATE TABLE `vista_estado_creditos` (
 ,`cliente` varchar(182)
 ,`cobratario` varchar(182)
 ,`monto` decimal(10,2)
-,`tipo` enum('diario','semanal','mensual')
+,`tipo` varchar(50)
 ,`cantidad_pagos` int(11)
 ,`fecha_inicio` date
 ,`fecha_fin` date
@@ -3092,13 +3123,6 @@ ALTER TABLE `creditos`
   ADD KEY `idx_estado` (`estado`);
 
 --
--- Indices de la tabla `tipos_credito`
---
-ALTER TABLE `tipos_credito`
-  ADD PRIMARY KEY (`idtipo`),
-  ADD UNIQUE KEY `uk_tipo_credito_tipo` (`tipo`);
-
---
 -- Indices de la tabla `datos_empresa`
 --
 ALTER TABLE `datos_empresa`
@@ -3126,7 +3150,8 @@ ALTER TABLE `historial_pagos`
 --
 ALTER TABLE `impresoras`
   ADD PRIMARY KEY (`idimpresora`),
-  ADD UNIQUE KEY `uk_impresora_nombre` (`nombre`);
+  ADD UNIQUE KEY `uk_impresora_usuario_nombre` (`usuario_id`,`nombre`),
+  ADD KEY `idx_impresora_usuario` (`usuario_id`);
 
 --
 -- Indices de la tabla `municipios`
@@ -3162,6 +3187,13 @@ ALTER TABLE `roles`
   ADD UNIQUE KEY `nombre` (`nombre`);
 
 --
+-- Indices de la tabla `tipos_credito`
+--
+ALTER TABLE `tipos_credito`
+  ADD PRIMARY KEY (`idtipo`),
+  ADD UNIQUE KEY `uk_tipo_credito_tipo` (`tipo`);
+
+--
 -- Indices de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
@@ -3180,22 +3212,16 @@ ALTER TABLE `creditos`
   MODIFY `idcredito` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
--- AUTO_INCREMENT de la tabla `tipos_credito`
---
-ALTER TABLE `tipos_credito`
-  MODIFY `idtipo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
 -- AUTO_INCREMENT de la tabla `historial_pagos`
 --
 ALTER TABLE `historial_pagos`
-  MODIFY `idhistorial` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `idhistorial` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
 
 --
 -- AUTO_INCREMENT de la tabla `impresoras`
 --
 ALTER TABLE `impresoras`
-  MODIFY `idimpresora` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `idimpresora` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `pagos_credito`
@@ -3207,13 +3233,19 @@ ALTER TABLE `pagos_credito`
 -- AUTO_INCREMENT de la tabla `personas`
 --
 ALTER TABLE `personas`
-  MODIFY `idpersona` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
+  MODIFY `idpersona` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT de la tabla `roles`
 --
 ALTER TABLE `roles`
   MODIFY `idrol` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT de la tabla `tipos_credito`
+--
+ALTER TABLE `tipos_credito`
+  MODIFY `idtipo` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios`

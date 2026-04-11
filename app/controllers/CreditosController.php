@@ -449,10 +449,14 @@ class CreditosController
             }
 
             $cobro = $datos['cobro'];
-            $view = __DIR__ . '/../views/recibos/cobro.php';
-            require $view;
-        } catch (Exception $e) {
-            echo "Error: " . htmlspecialchars($e->getMessage());
+            $html = $this->ticketPrinterService->generarHtmlCobro($cobro, true);
+
+            header('Content-Type: text/html; charset=UTF-8');
+            echo $html;
+        } catch (Throwable $e) {
+            header('Content-Type: text/plain; charset=UTF-8');
+            http_response_code(400);
+            echo 'Error al generar ticket: ' . $e->getMessage();
         }
     }
 
@@ -498,7 +502,7 @@ class CreditosController
             }
 
             $cobro = $datosRecibo['cobro'];
-            $html = $this->ticketPrinterService->generarHtmlCobro($cobro);
+            $html = $this->ticketPrinterService->generarHtmlCobro($cobro, true);
 
             header('Content-Type: text/html; charset=UTF-8');
             echo $html;
@@ -571,7 +575,7 @@ class CreditosController
                 throw new Exception('El cliente no tiene un correo válido para enviar el ticket');
             }
 
-            $html = $this->ticketPrinterService->generarHtmlCobro($cobro);
+            $html = $this->ticketPrinterService->generarHtmlCobro($cobro, false);
             $asunto = 'Ticket de pago ' . (string)($cobro['numero_recibo'] ?? '');
 
             $from = 'no-reply@localhost';

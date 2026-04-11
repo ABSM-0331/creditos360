@@ -102,11 +102,5 @@ $disponibles = $disponibles ?? [];
                 <button type="submit" class="btn-primary">Agregar</button>
             </form>
         </div>
-        <button class="btn-testear"
-            data-id="<?= htmlspecialchars('1') ?>"
-            data-impresora="<?= htmlspecialchars('POS58') ?>"
-            data-logo="<?= htmlspecialchars("https://www.ammarket.com/tienda/citricos/naranja-de-mesa/?srsltid=AfmBOoqGII4U5_QqQNqc6UMjWi5ifYAyY4h9U7H7VV3cjfph-Mnw7aEa") ?>">
-            Testear
-        </button>
     </div>
 </section>

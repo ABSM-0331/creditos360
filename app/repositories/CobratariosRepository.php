@@ -45,6 +45,58 @@ class CobratariosRepository
         return $stmt->fetchAll();
     }
 
+    public function obtenerTodosConEstadisticas(): array
+    {
+        $sql = "SELECT
+                    p.idpersona AS idcobratario,
+                    CONCAT(p.ap_paterno, ' ', p.ap_materno, ' ', p.nombres) AS nombre,
+                    p.curp,
+                    p.telefono,
+                    p.sexo,
+                    p.edad,
+                    e.nombre AS estado,
+                    m.nombre AS municipio,
+                    p.email,
+                    p.clave_elector,
+                    p.fecha_nacimiento,
+                    p.foto_ruta,
+                    p.dom_calle,
+                    p.dom_numero,
+                    p.dom_colonia,
+                    p.dom_cp,
+                    p.idestado,
+                    p.idmunicipio,
+                    p.dom_referencia,
+                    COALESCE(cred.total_clientes, 0) AS clientes_asignados,
+                    COALESCE(cred.total_creditos, 0) AS creditos_asignados,
+                    COALESCE(cob.total_cobrado, 0) AS total_cobrado
+                FROM personas p
+                LEFT JOIN usuarios u ON u.idpersona = p.idpersona
+                JOIN estados e ON e.idestado = p.idestado
+                JOIN municipios m ON m.idmunicipio = p.idmunicipio
+                LEFT JOIN (
+                    SELECT
+                        idcobratario,
+                        COUNT(*) AS total_creditos,
+                        COUNT(DISTINCT idcliente) AS total_clientes
+                    FROM creditos
+                    GROUP BY idcobratario
+                ) cred ON cred.idcobratario = p.idpersona
+                LEFT JOIN (
+                    SELECT
+                        c.idcobratario,
+                        COALESCE(SUM(hp.monto_pagado), 0) AS total_cobrado
+                    FROM historial_pagos hp
+                    INNER JOIN creditos c ON c.idcredito = hp.idcredito
+                    GROUP BY c.idcobratario
+                ) cob ON cob.idcobratario = p.idpersona
+                WHERE p.idrol = 3
+                ORDER BY p.ap_paterno, p.ap_materno, p.nombres";
+
+        $stmt = $this->db->query($sql);
+        return $stmt->fetchAll();
+    }
+
     public function crearCobratario(array $data): int
     {
         try {

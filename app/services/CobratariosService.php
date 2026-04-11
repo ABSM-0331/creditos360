@@ -13,6 +13,11 @@ class CobratariosService
         return $this->repository->obtenerTodos();
     }
 
+    public function obtenerTodosConEstadisticas(): array
+    {
+        return $this->repository->obtenerTodosConEstadisticas();
+    }
+
     public function crearCobratario(array $data): void
     {
         $this->repository->crearCobratario($data);

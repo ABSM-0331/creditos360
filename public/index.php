@@ -49,6 +49,12 @@ switch ($uri) {
     case 'dashboard':
         (new DashboardController())->index();
         break;
+    case 'dashboard/avance-cobranza':
+        (new DashboardController())->avanceCobranza();
+        break;
+    case 'dashboard/avance-cobratarios-pdf':
+        (new DashboardController())->exportarAvanceCobratariosPdf();
+        break;
     case 'dashboard-cliente':
         (new DashboardController())->cliente();
         break;
@@ -151,8 +157,8 @@ switch ($uri) {
     case "test":
         require_once __DIR__ . '/testear_ticket.php';
         break;
-    default:
-        http_response_code(404);
-        echo "404 Not Found";
-        break;
+        // default:
+        //     http_response_code(404);
+        //     echo "404 Not Found";
+        //     break;
 }

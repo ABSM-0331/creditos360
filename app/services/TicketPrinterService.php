@@ -40,7 +40,7 @@ class TicketPrinterService
             ];
         }
     }
-    public function generarHtmlCobro(array $cobro): string
+    public function generarHtmlCobro(array $cobro, bool $modoInteractivo = true): string
     {
         $empresa = ['nombre_empresa' => 'GestionPro'];
         if (class_exists('EmpresaService')) {
@@ -51,391 +51,73 @@ class TicketPrinterService
             }
         }
 
-        return $this->construirHtmlRecibo($cobro, $empresa);
+        return $this->construirHtmlRecibo($cobro, $empresa, $modoInteractivo);
     }
 
-    private function construirHtmlRecibo(array $cobro, array $empresa): string
+    private function construirHtmlRecibo(array $cobro, array $empresa, bool $modoInteractivo = true): string
     {
-        $nombreEmpresa = $this->esc((string)($empresa['nombre_empresa'] ?? 'GestionPro'));
-        $representante = $this->esc((string)($empresa['representante_legal'] ?? ''));
-        $rfc = $this->esc((string)($empresa['rfc'] ?? ''));
-        $direccion = $this->esc((string)($empresa['direccion'] ?? ''));
-        $telefono = $this->esc((string)($empresa['telefono'] ?? ''));
-        $correo = $this->esc((string)($empresa['correo'] ?? ''));
-        $logoRuta = trim((string)($empresa['logo_ruta'] ?? ''));
-        $logoUrl = $logoRuta !== '' ? '/' . ltrim($logoRuta, '/') : '';
-
-        $numeroRecibo = $this->esc((string)($cobro['numero_recibo'] ?? 'N/A'));
-        $fecha = $this->esc($this->formatearFecha((string)($cobro['fecha'] ?? date('Y-m-d'))));
-        $cliente = $this->esc((string)($cobro['cliente']['nombre'] ?? 'N/A'));
-        $cobrador = $this->esc((string)($cobro['cobrador'] ?? 'N/A'));
-        $clienteEmail = trim((string)($cobro['cliente']['email'] ?? ''));
-
-        $pagos = is_array($cobro['pagos'] ?? null) ? $cobro['pagos'] : [];
-        $primerPago = $pagos[0] ?? [];
-
-        $montoPagado = (float)($cobro['resumen']['total_cobrado'] ?? ($primerPago['monto_pagado'] ?? 0));
-        $capital = (float)($cobro['resumen']['total_programado'] ?? ($primerPago['monto_programado'] ?? 0));
-        $interes = (float)($cobro['resumen']['total_moratorio'] ?? 0);
-        $saldoRestante = (float)($cobro['credito']['saldo_pendiente_momento'] ?? ($cobro['credito']['saldo_pendiente'] ?? 0));
-        $cantidadPagos = max(1, (int)($cobro['resumen']['cantidad_pagos_cobrados'] ?? count($pagos)));
-        $idCredito = (int)($cobro['credito']['idcredito'] ?? 0);
-        $historialIds = array_values(array_unique(array_filter(array_map(
-            static fn($pago) => (int)($pago['idhistorial'] ?? 0),
-            $pagos
-        ))));
-        $historialCsv = implode(',', $historialIds);
-
-        $detallePagos = '';
-        foreach ($pagos as $pago) {
-            $numeroPago = (int)($pago['numero_pago'] ?? 0);
-            $fechaPagoProgramada = $this->esc($this->formatearFecha((string)($pago['fecha_programada'] ?? '')));
-            $montoPagoItem = (float)($pago['monto_pagado'] ?? 0);
-            $detallePagos .= '<div class="row row-pago"><span>Letra #' . $numeroPago . ' (' . $fechaPagoProgramada . ')</span><span class="value">$' . $this->money($montoPagoItem) . '</span></div>';
+        $view = __DIR__ . '/../views/recibos/ticket.php';
+        if (!is_file($view)) {
+            throw new Exception('No se encontró la vista de ticket.');
         }
 
         $payloadImpresion = $this->construirPayloadImpresion($cobro, $empresa);
+        $impresorasDisponibles = $modoInteractivo ? $this->obtenerImpresorasUsuario() : [];
+        $impresoraPredeterminada = $this->determinarImpresoraPredeterminada($impresorasDisponibles);
+        $clienteEmail = trim((string)($cobro['cliente']['email'] ?? ''));
+        $historialCsv = implode(',', array_values(array_unique(array_filter(array_map(
+            static fn($pago) => (int)($pago['idhistorial'] ?? 0),
+            is_array($cobro['pagos'] ?? null) ? $cobro['pagos'] : []
+        )))));
 
-        $htmlLogo = $logoUrl !== ''
-            ? '<img class="logo" src="' . $this->esc($logoUrl) . '" alt="Logo">'
-            : '';
+        ob_start();
+        require $view;
+        return (string)ob_get_clean();
+    }
 
-        return '<!DOCTYPE html>
-        <html lang="es">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Ticket de Cobro</title>
-            <style>
-                * { box-sizing: border-box; }
-                body {
-                    margin: 0;
-                    padding: 18px;
-                    background: #ececec;
-                    font-family: "IBM Plex Mono", "Courier New", monospace;
-                    color: #111827;
-                }
-                .modal {
-                    width: 100%;
-                    max-width: 500px;
-                    margin: 0 auto;
-                    background: #ffffff;
-                    border: 1px solid #d1d5db;
-                    border-radius: 10px;
-                    padding: 14px;
-                }
-                .modal-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 10px;
-                    font-family: "Segoe UI", Tahoma, sans-serif;
-                }
-                .modal-title {
-                    margin: 0;
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: #1f2937;
-                }
-                .modal-close {
-                    border: none;
-                    background: transparent;
-                    font-size: 30px;
-                    line-height: 1;
-                    cursor: pointer;
-                    color: #6b7280;
-                }
-                .ticket {
-                    width: 100%;
-                    max-width: 100%;
-                    margin: 0 auto;
-                    background: #fff;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 10px;
-                    padding: 16px;
-                }
-                .center { text-align: center; }
-                .logo {
-                    width: 70px;
-                    height: 70px;
-                    object-fit: contain;
-                    margin: 0 auto 6px auto;
-                    display: block;
-                }
-                h1 {
-                    margin: 0 0 4px 0;
-                    font-size: 26px;
-                    letter-spacing: 0.5px;
-                    font-weight: 800;
-                }
-                p {
-                    margin: 2px 0;
-                    font-size: 12px;
-                }
-                .sep {
-                    border-top: 1px dashed #9ca3af;
-                    margin: 10px 0;
-                }
-                .subtitle {
-                    margin: 4px 0;
-                    font-size: 26px;
-                    font-weight: 800;
-                    letter-spacing: 1.2px;
-                }
-                .row {
-                    display: flex;
-                    justify-content: space-between;
-                    gap: 10px;
-                    margin: 6px 0;
-                    font-size: 12px;
-                }
-                .row-pago {
-                    font-size: 11px;
-                    color: #374151;
-                }
-                .row .value { font-weight: 700; }
-                .footer {
-                    text-align: center;
-                    margin-top: 8px;
-                    font-size: 13px;
-                    color: #4b5563;
-                }
-                .actions {
-                    margin-top: 14px;
-                    display: flex;
-                    gap: 10px;
-                    justify-content: center;
-                }
-                .btn {
-                    border: 1px solid #d1d5db;
-                    border-radius: 8px;
-                    background: #fff;
-                    padding: 10px 16px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    font-weight: 600;
-                }
-                .btn svg {
-                    vertical-align: middle;
-                    margin-right: 6px;
-                }
-                @media print {
-                    body { background: #fff; padding: 0; }
-                    .modal { border: none; border-radius: 0; padding: 0; max-width: 100%; }
-                    .modal-header { display: none; }
-                    .ticket { border: none; border-radius: 0; }
-                    .actions { display: none; }
-                }
-            </style>
-        </head>
-        <body>
-            <section class="modal">
-                <header class="modal-header">
-                    <h2 class="modal-title">Recibo de Pago</h2>
-                    <button class="modal-close" onclick="window.close()">×</button>
-                </header>
+    private function resolverLogoBase64(string $logoRuta): ?string
+    {
+        $logoRuta = trim($logoRuta);
+        if ($logoRuta === '') {
+            return null;
+        }
 
-            <article class="ticket">
-                <div class="center">
-                    ' . $htmlLogo . '
-                    <h1>' . $nombreEmpresa . '</h1>
-                    ' . ($representante !== '' ? '<p>Rep: ' . $representante . '</p>' : '') . '
-                    ' . ($rfc !== '' ? '<p>RFC: ' . $rfc . '</p>' : '') . '
-                    ' . ($direccion !== '' ? '<p>' . $direccion . '</p>' : '') . '
-                    ' . ($telefono !== '' ? '<p>Tel: ' . $telefono . '</p>' : '') . '
-                    ' . ($correo !== '' ? '<p>' . $correo . '</p>' : '') . '
-                </div>
+        $rutaAbsoluta = __DIR__ . '/../../public/' . ltrim($logoRuta, '/');
+        if (!is_file($rutaAbsoluta)) {
+            return null;
+        }
 
-                <div class="sep"></div>
-                <div class="center subtitle">RECIBO DE PAGO</div>
-                <div class="sep"></div>
+        $contenido = @file_get_contents($rutaAbsoluta);
+        if ($contenido === false) {
+            return null;
+        }
 
-            <div class="row"><span>Recibo:</span><span class="value">' . $numeroRecibo . '</span></div>
-                <div class="row"><span>Fecha:</span><span>' . $fecha . '</span></div>
-                <div class="row"><span>Cliente:</span><span>' . $cliente . '</span></div>
-            <div class="row"><span>Cobratario:</span><span>' . $cobrador . '</span></div>
+        $mime = @mime_content_type($rutaAbsoluta);
+        if (!is_string($mime) || $mime === '') {
+            $mime = 'image/png';
+        }
 
-                <div class="sep"></div>
+        return 'data:' . $mime . ';base64,' . base64_encode($contenido);
+    }
 
-                <div class="row"><span>Letras cobradas:</span><span class="value">' . $cantidadPagos . '</span></div>
-                ' . $detallePagos . '
+    private function esc(string $texto): string
+    {
+        return htmlspecialchars($texto, ENT_QUOTES, 'UTF-8');
+    }
 
-                <div class="sep"></div>
+    private function formatearFecha(string $fecha): string
+    {
+        try {
+            $date = new DateTime($fecha);
+            return $date->format('d/m/Y');
+        } catch (Throwable $e) {
+            return $fecha;
+        }
+    }
 
-                <div class="row"><span>Monto pagado:</span><span class="value">$' . $this->money($montoPagado) . '</span></div>
-                <div class="row"><span>Capital:</span><span>$' . $this->money($capital) . '</span></div>
-                <div class="row"><span>Interes moratorio:</span><span>$' . $this->money($interes) . '</span></div>
-
-                <div class="sep"></div>
-
-                <div class="row"><span>Saldo restante:</span><span class="value">$' . $this->money($saldoRestante) . '</span></div>
-
-                <div class="sep"></div>
-                <div class="footer">Gracias por su pago</div>
-
-                <div class="actions">
-                    <button class="btn btn-print" onclick="imprimir()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-                            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                            <rect x="6" y="14" width="12" height="8"></rect>
-                        </svg>
-                        Imprimir
-                    </button>
-                    <button class="btn" onclick="enviarTicketCorreo()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 2L11 13"></path>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
-                        Enviar
-                    </button>
-                </div>
-            </article>
-            </section>
-
-            <script>
-
-                const PRINT_BASE = "http://127.0.0.1:9666";
-                const PRINT_AGENT = PRINT_BASE + "/print";
-                const PRINT_STATUS = PRINT_BASE + "/status";
-                const PRINT_TOKEN = "secreto-123";
-                const ticketPayload = ' . json_encode($payloadImpresion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ';
-
-                async function fetchWithTimeout(resource, options = {}) {
-                    const { timeout = 30000, ...opts } = options;
-                    const controller = new AbortController();
-                    const timer = setTimeout(() => controller.abort(), timeout);
-                    try {
-                        return await fetch(resource, { ...opts, signal: controller.signal });
-                    } finally {
-                        clearTimeout(timer);
-                    }
-                }
-
-                async function detectarAgente() {
-                    try {
-                        const response = await fetchWithTimeout(PRINT_STATUS, { method: "GET", timeout: 2000 });
-                        if (!response.ok) {
-                            return "dotnet";
-                        }
-                        const data = await response.json().catch(() => ({}));
-                        if (data && typeof data === "object" && "btConnected" in data && "mac" in data) {
-                            return "b4a";
-                        }
-                        return "dotnet";
-                    } catch (error) {
-                        return "dotnet";
-                    }
-                }
-
-                window.imprimir = async function () {
-                    const btn = document.querySelector(".btn-print");
-                    const textoOriginal = btn ? btn.innerHTML : "";
-
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.textContent = "Imprimiendo...";
-                    }
-
-                    try {
-                        const tipoAgente = await detectarAgente();
-                        let response;
-
-                        if (tipoAgente === "b4a") {
-                            response = await fetchWithTimeout(PRINT_AGENT, {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    "X-PRINT-TOKEN": PRINT_TOKEN
-                                },
-                                body: JSON.stringify({
-                                    url: window.location.href
-                                }),
-                                timeout: 25000
-                            });
-                        } else {
-                            response = await fetchWithTimeout(PRINT_AGENT, {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    "X-PRINT-TOKEN": PRINT_TOKEN
-                                },
-                                body: JSON.stringify(ticketPayload),
-                                timeout: 45000
-                            });
-                        }
-
-                        let data = null;
-                        const raw = await response.text();
-                        try {
-                            data = JSON.parse(raw);
-                        } catch (e) {
-                            data = { ok: response.ok, mensaje: raw };
-                        }
-
-                        if (!response.ok || !(data.ok === true || data.success === true)) {
-                            throw new Error(data.error || data.mensaje || "No se pudo imprimir con el agente local.");
-                        }
-
-                        window.alert(data.mensaje || "Ticket enviado a impresora.");
-                    } catch (error) {
-                        window.alert("Error al imprimir ticket: " + (error.message || "No se pudo conectar con el agente local de impresión."));
-                    } finally {
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.innerHTML = textoOriginal;
-                        }
-                    }
-                }
-                window.enviarTicketCorreo = async function () {
-                    const correoSugerido = ' . json_encode($clienteEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ' || "";
-                    const correo = window.prompt("Correo del cliente", correoSugerido);
-                    if (correo === null) {
-                        return;
-                    }
-
-                    const correoFinal = correo.trim();
-                    if (!correoFinal) {
-                        window.alert("Debes capturar un correo para enviar el ticket.");
-                        return;
-                    }
-
-                    const btn = document.querySelector(".btn[onclick=\"enviarTicketCorreo()\"]");
-                    const textoOriginal = btn ? btn.innerHTML : "";
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.textContent = "Enviando...";
-                    }
-
-                    try {
-                        const formData = new FormData();
-                        formData.append("idcredito", ' . (int)$idCredito . ');
-                        formData.append("historial", ' . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');
-                        formData.append("correo", correoFinal);
-
-                        const response = await fetch("/proyecto-residencia/public/creditos/enviar-ticket", {
-                            method: "POST",
-                            body: formData,
-                        });
-
-                        const data = await response.json();
-                        if (!response.ok || !data.success) {
-                            throw new Error(data.error || "No se pudo enviar el ticket.");
-                        }
-
-                        window.alert("Ticket enviado correctamente a: " + (data.correo || correoFinal));
-                    } catch (error) {
-                        window.alert("Error al enviar ticket: " + (error.message || "Error desconocido"));
-                    } finally {
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.innerHTML = textoOriginal;
-                        }
-                    }
-                }
-            </script>
-        </body>
-        </html>';
+    private function money(float $monto): string
+    {
+        return number_format($monto, 2, '.', ',');
     }
 
     private function construirPayloadImpresion(array $cobro, array $empresa): array
@@ -535,8 +217,17 @@ class TicketPrinterService
         foreach ($pagos as $pago) {
             $numeroPago = (int)($pago['numero_pago'] ?? 0);
             $fechaPago = $this->formatearFecha((string)($pago['fecha_programada'] ?? ''));
-            $montoItem = number_format((float)($pago['monto_pagado'] ?? 0), 2, '.', ',');
-            $lineasImpresion[] = $linea('Letra #' . $numeroPago . ' ' . $fechaPago, '$' . $montoItem, $anchoTicket);
+            $montoPagadoItem = (float)($pago['monto_pagado'] ?? 0);
+            $moratorioPago = (float)($pago['recargo_moratorio'] ?? 0);
+            $valorLetra = (float)($pago['monto_programado'] ?? max(0, $montoPagadoItem - $moratorioPago));
+            $totalConMoratorio = $valorLetra + $moratorioPago;
+
+            $lineasImpresion[] = $linea('Letra #' . $numeroPago . ' ' . $fechaPago, '$' . $this->money($valorLetra), $anchoTicket);
+
+            if ($moratorioPago > 0) {
+                $lineasImpresion[] = $linea('  Moratorio:', '$' . $this->money($moratorioPago), $anchoTicket);
+                $lineasImpresion[] = $linea('  Total letra #' . $numeroPago . ':', '$' . $this->money($totalConMoratorio), $anchoTicket);
+            }
         }
 
         $lineasImpresion[] = str_repeat('-', $anchoTicket);
@@ -565,53 +256,48 @@ class TicketPrinterService
             'LogoBase64' => $logoBase64,
             'PaperWidthPx' => 220,
             'FontName' => 'Consolas',
-            'FontSize' => 8,
+            'FontSize' => 7,
         ];
     }
 
-    private function resolverLogoBase64(string $logoRuta): ?string
+    private function obtenerImpresorasUsuario(): array
     {
-        $logoRuta = trim($logoRuta);
-        if ($logoRuta === '') {
-            return null;
+        if (!class_exists('ImpresorasService')) {
+            return [];
         }
 
-        $rutaAbsoluta = __DIR__ . '/../../public/' . ltrim($logoRuta, '/');
-        if (!is_file($rutaAbsoluta)) {
-            return null;
+        $usuarioId = (int)($_SESSION['usuario_id'] ?? 0);
+        if ($usuarioId <= 0) {
+            return [];
         }
 
-        $contenido = @file_get_contents($rutaAbsoluta);
-        if ($contenido === false) {
-            return null;
-        }
-
-        $mime = @mime_content_type($rutaAbsoluta);
-        if (!is_string($mime) || $mime === '') {
-            $mime = 'image/png';
-        }
-
-        return 'data:' . $mime . ';base64,' . base64_encode($contenido);
-    }
-
-    private function esc(string $texto): string
-    {
-        return htmlspecialchars($texto, ENT_QUOTES, 'UTF-8');
-    }
-
-    private function formatearFecha(string $fecha): string
-    {
         try {
-            $date = new DateTime($fecha);
-            return $date->format('d/m/Y');
+            $impresoras = (new ImpresorasService())->obtenerRegistradas($usuarioId);
+            return is_array($impresoras) ? array_values($impresoras) : [];
         } catch (Throwable $e) {
-            return $fecha;
+            return [];
         }
     }
 
-    private function money(float $monto): string
+    private function determinarImpresoraPredeterminada(array $impresoras): string
     {
-        return number_format($monto, 2, '.', ',');
+        foreach ($impresoras as $impresora) {
+            if ((int)($impresora['activa'] ?? 0) === 1) {
+                $nombre = trim((string)($impresora['nombre'] ?? ''));
+                if ($nombre !== '') {
+                    return $nombre;
+                }
+            }
+        }
+
+        foreach ($impresoras as $impresora) {
+            $nombre = trim((string)($impresora['nombre'] ?? ''));
+            if ($nombre !== '') {
+                return $nombre;
+            }
+        }
+
+        return '';
     }
 
     private function obtenerNombreImpresoraActiva(): string

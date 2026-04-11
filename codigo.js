@@ -496,3 +496,171 @@ if (submitter && submitter.value === 'Aceptado') {
         if (submitBtn) submitBtn.disabled = false;
     }
 });
+
+// const PRINT_BASE = "http://127.0.0.1:9666";
+// const PRINT_AGENT = PRINT_BASE + "/print";
+// const PRINT_STATUS = PRINT_BASE + "/status";
+// const PRINT_TOKEN = "secreto-123";
+// const ticketPayload =
+//     " . json_encode($payloadImpresion, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ";
+
+async function fetchWithTimeout(resource, options = {}) {
+    const { timeout = 30000, ...opts } = options;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+        return await fetch(resource, { ...opts, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function detectarAgente() {
+    try {
+        const response = await fetchWithTimeout(PRINT_STATUS, {
+            method: "GET",
+            timeout: 2000,
+        });
+        if (!response.ok) {
+            return "dotnet";
+        }
+        const data = await response.json().catch(() => ({}));
+        if (
+            data &&
+            typeof data === "object" &&
+            "btConnected" in data &&
+            "mac" in data
+        ) {
+            return "b4a";
+        }
+        return "dotnet";
+    } catch (error) {
+        return "dotnet";
+    }
+}
+
+window.imprimir = async function () {
+    const btn = document.querySelector(".btn-print");
+    const textoOriginal = btn ? btn.innerHTML : "";
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Imprimiendo...";
+    }
+
+    try {
+        const tipoAgente = await detectarAgente();
+        let response;
+
+        if (tipoAgente === "b4a") {
+            response = await fetchWithTimeout(PRINT_AGENT, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-PRINT-TOKEN": PRINT_TOKEN,
+                },
+                body: JSON.stringify({
+                    url: window.location.href,
+                }),
+                timeout: 25000,
+            });
+        } else {
+            response = await fetchWithTimeout(PRINT_AGENT, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-PRINT-TOKEN": PRINT_TOKEN,
+                },
+                body: JSON.stringify(ticketPayload),
+                timeout: 45000,
+            });
+        }
+
+        let data = null;
+        const raw = await response.text();
+        try {
+            data = JSON.parse(raw);
+        } catch (e) {
+            data = { ok: response.ok, mensaje: raw };
+        }
+
+        if (!response.ok || !(data.ok === true || data.success === true)) {
+            throw new Error(
+                data.error ||
+                    data.mensaje ||
+                    "No se pudo imprimir con el agente local.",
+            );
+        }
+
+        window.alert(data.mensaje || "Ticket enviado a impresora.");
+    } catch (error) {
+        window.alert(
+            "Error al imprimir ticket: " +
+                (error.message ||
+                    "No se pudo conectar con el agente local de impresión."),
+        );
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+};
+window.enviarTicketCorreo = async function () {
+    const correoSugerido =
+        " . json_encode($clienteEmail, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . " ||
+        "";
+    const correo = window.prompt("Correo del cliente", correoSugerido);
+    if (correo === null) {
+        return;
+    }
+
+    const correoFinal = correo.trim();
+    if (!correoFinal) {
+        window.alert("Debes capturar un correo para enviar el ticket.");
+        return;
+    }
+
+    const btn = document.querySelector('.btn[onclick="enviarTicketCorreo()"]');
+    const textoOriginal = btn ? btn.innerHTML : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Enviando...";
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append("idcredito", " . (int)$idCredito . ");
+        formData.append(
+            "historial",
+            " . json_encode($historialCsv, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ",
+        );
+        formData.append("correo", correoFinal);
+
+        const response = await fetch(
+            "/proyecto-residencia/public/creditos/enviar-ticket",
+            {
+                method: "POST",
+                body: formData,
+            },
+        );
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "No se pudo enviar el ticket.");
+        }
+
+        window.alert(
+            "Ticket enviado correctamente a: " + (data.correo || correoFinal),
+        );
+    } catch (error) {
+        window.alert(
+            "Error al enviar ticket: " + (error.message || "Error desconocido"),
+        );
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+};

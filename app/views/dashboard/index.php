@@ -1,5 +1,18 @@
 <!-- Dashboard Section -->
 <section id="dashboard" class="content-section active">
+    <?php
+    $datos = [
+        'totalClientes' => 124,
+        'totalCobratarios' => 18,
+        'cobroHoy' => 45230,
+        'cobrosPendientesHoy' => 32
+    ];
+
+    // Usar estadísticas si están disponibles
+    if (isset($estadisticas) && is_array($estadisticas)) {
+        $datos = $estadisticas;
+    }
+    ?>
     <div class="stats-grid">
         <div class="stat-card">
             <div class="stat-icon blue">
@@ -9,7 +22,7 @@
                 </svg>
             </div>
             <div class="stat-info">
-                <span class="stat-value">124</span>
+                <span class="stat-value"><?= (int)$datos['totalClientes'] ?></span>
                 <span class="stat-label">Total Clientes</span>
             </div>
         </div>
@@ -23,7 +36,7 @@
                 </svg>
             </div>
             <div class="stat-info">
-                <span class="stat-value">18</span>
+                <span class="stat-value"><?= (int)$datos['totalCobratarios'] ?></span>
                 <span class="stat-label">Total Cobratarios</span>
             </div>
         </div>
@@ -35,8 +48,8 @@
                 </svg>
             </div>
             <div class="stat-info">
-                <span class="stat-value">$45,230</span>
-                <span class="stat-label">Total Cobrado</span>
+                <span class="stat-value">$<?= number_format($datos['cobroHoy'], 2, '.', ',') ?></span>
+                <span class="stat-label">Cobrado Hoy</span>
             </div>
         </div>
         <div class="stat-card">
@@ -49,8 +62,8 @@
                 </svg>
             </div>
             <div class="stat-info">
-                <span class="stat-value">32</span>
-                <span class="stat-label">Cobros Pendientes</span>
+                <span class="stat-value"><?= (int)$datos['cobrosPendientesHoy'] ?></span>
+                <span class="stat-label">Cobros Pendientes Hoy</span>
             </div>
         </div>
     </div>

@@ -31,7 +31,11 @@ if (class_exists('EmpresaService')) {
     <?php $rol = isset($_SESSION['usuario_rol']) ? (int)$_SESSION['usuario_rol'] : null; ?>
     <?php
     $dashboardHref = '/proyecto-residencia/public/dashboard';
-    $isDashboardAdmin = str_contains($currentPath, '/dashboard') && !str_contains($currentPath, '/dashboard-cliente') && !str_contains($currentPath, '/dashboard-cobratario');
+    $isAvanceCobranza = str_contains($currentPath, '/dashboard/avance-cobranza');
+    $isDashboardAdmin = str_contains($currentPath, '/dashboard')
+        && !$isAvanceCobranza
+        && !str_contains($currentPath, '/dashboard-cliente')
+        && !str_contains($currentPath, '/dashboard-cobratario');
     $isDashboardCliente = str_contains($currentPath, '/dashboard-cliente');
     $isDashboardCobratario = str_contains($currentPath, '/dashboard-cobratario');
     if ($rol === 2) {
@@ -68,6 +72,14 @@ if (class_exists('EmpresaService')) {
                 </li>
             <?php endif; ?>
             <?php if ($rol === 1): ?>
+                <li>
+                    <a href="/proyecto-residencia/public/dashboard/avance-cobranza" class="nav-link <?= $isAvanceCobranza ? 'active' : '' ?>">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <span>Avance Cobranza</span>
+                    </a>
+                </li>
                 <li>
                     <a href="/proyecto-residencia/public/dashboard-cobratario#tablaCreditosCobratario" class="nav-link <?= $isDashboardCobratario ? 'active' : '' ?>">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -9,6 +9,16 @@
     $cssPath = __DIR__ . '/../../../public/assets/css/styles.css';
     $cssVersion = file_exists($cssPath) ? filemtime($cssPath) : time();
     ?>
+    <script>
+        (function() {
+            try {
+                var savedTheme = localStorage.getItem('gp_theme');
+                if (savedTheme === 'light' || savedTheme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', savedTheme);
+                }
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/assets/css/styles.css?v=<?= (int)$cssVersion ?>">
 </head>
 

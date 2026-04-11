@@ -1,4 +1,4 @@
-<?php $cobratarios = (new CobratarioController())->cobratarios(); ?>
+<?php $cobratarios = $cobratarios ?? []; ?>
 <section id="cobratarios" class="content-section">
     <div class="section-header">
         <h2>Catálogo de Cobratarios</h2>
@@ -36,11 +36,11 @@
                 </div>
                 <div class="person-stats">
                     <div class="stat">
-                        <span class="stat-number">12</span>
+                        <span class="stat-number"><?= (int)($cobratario['clientes_asignados'] ?? 0) ?></span>
                         <span class="stat-text">Clientes</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-number">$3,500</span>
+                        <span class="stat-number">$<?= number_format((float)($cobratario['total_cobrado'] ?? 0), 2, '.', ',') ?></span>
                         <span class="stat-text">Cobrado</span>
                     </div>
                 </div>

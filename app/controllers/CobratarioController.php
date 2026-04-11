@@ -14,6 +14,8 @@ class CobratarioController
             header('location: /proyecto-residencia/public/login');
             exit;
         }
+
+        $cobratarios = $this->service->obtenerTodosConEstadisticas();
         $view = __DIR__ . '/../views/cobratarios/index.php';
         require __DIR__ . '/../views/layouts/app.php';
     }
