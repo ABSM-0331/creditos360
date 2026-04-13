@@ -198,16 +198,14 @@ class DashboardController
         $creditosActivos = 0;
         $clientesUnicos = [];
         $totalCobrado = 0.0;
-        $saldoPendienteTotal = 0.0;
+        $pendienteCobroHoy = 0.0;
 
         if ($rol === 1) {
-            foreach ($creditos as $credito) {
-                $totalPagar = (float)($credito['total_pagos'] ?? 0);
-                $saldoPendiente = (float)($credito['saldo_pendiente'] ?? 0);
-                $totalCobrado += max(0, $totalPagar - $saldoPendiente);
-            }
+            $totalCobrado = $this->creditosRepo->obtenerTotalCobradoHoyGlobal();
+            $pendienteCobroHoy = $this->creditosRepo->obtenerPendienteCobroHoyGlobal();
         } elseif ($idCobratario) {
-            $totalCobrado = $this->creditosRepo->obtenerTotalCobradoCobratario($idCobratario);
+            $totalCobrado = $this->creditosRepo->obtenerTotalCobradoCobratarioHoy((int)$idCobratario);
+            $pendienteCobroHoy = $this->creditosRepo->obtenerPendienteCobroCobratarioHoy((int)$idCobratario);
         }
 
         foreach ($creditos as $credito) {
@@ -218,9 +216,6 @@ class DashboardController
             if (isset($credito['idcliente'])) {
                 $clientesUnicos[(string)$credito['idcliente']] = true;
             }
-
-            $saldoPendiente = (float)($credito['saldo_pendiente'] ?? 0);
-            $saldoPendienteTotal += $saldoPendiente;
         }
 
         $resumenCobratario = [
@@ -228,7 +223,7 @@ class DashboardController
             'creditosActivos' => $creditosActivos,
             'clientesAsignados' => count($clientesUnicos),
             'totalCobrado' => $totalCobrado,
-            'saldoPendienteTotal' => $saldoPendienteTotal,
+            'pendienteCobroHoy' => $pendienteCobroHoy,
         ];
 
         $view = __DIR__ . '/../views/dashboard/cobratario.php';

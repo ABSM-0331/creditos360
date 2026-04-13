@@ -5,6 +5,7 @@
         'fecha_fin' => date('Y-m-d'),
         'ids_cobratario' => [],
     ];
+
     $avanceCobratarios = $avanceCobratarios ?? [
         'resumen' => [],
         'detalle' => [],

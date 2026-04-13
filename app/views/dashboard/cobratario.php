@@ -5,7 +5,7 @@ $resumenCobratario = $resumenCobratario ?? [
     'creditosActivos' => 0,
     'clientesAsignados' => 0,
     'totalCobrado' => 0,
-    'saldoPendienteTotal' => 0,
+    'pendienteCobroHoy' => 0,
 ];
 ?>
 
@@ -16,7 +16,7 @@ $resumenCobratario = $resumenCobratario ?? [
 
     <div id="resumenCobratario" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; scroll-margin-top: 90px;">
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
-            <p style="margin: 0 0 6px 0; color: var(--text-secondary); font-size: 12px;">Total cobrado</p>
+            <p style="margin: 0 0 6px 0; color: var(--text-secondary); font-size: 12px;">Total cobrado hoy</p>
             <p style="margin: 0; color: var(--text-primary); font-size: 24px; font-weight: 700;">$<?= number_format((float)$resumenCobratario['totalCobrado'], 2, '.', ',') ?></p>
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
@@ -32,8 +32,8 @@ $resumenCobratario = $resumenCobratario ?? [
             <p style="margin: 0; color: var(--text-primary); font-size: 24px; font-weight: 700;"><?= (int)$resumenCobratario['creditosActivos'] ?></p>
         </div>
         <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px;">
-            <p style="margin: 0 0 6px 0; color: var(--text-secondary); font-size: 12px;">Saldo pendiente total</p>
-            <p style="margin: 0; color: var(--text-primary); font-size: 24px; font-weight: 700;">$<?= number_format((float)$resumenCobratario['saldoPendienteTotal'], 2, '.', ',') ?></p>
+            <p style="margin: 0 0 6px 0; color: var(--text-secondary); font-size: 12px;">Pendiente por cobrar hoy</p>
+            <p style="margin: 0; color: var(--text-primary); font-size: 24px; font-weight: 700;">$<?= number_format((float)$resumenCobratario['pendienteCobroHoy'], 2, '.', ',') ?></p>
         </div>
     </div>
 

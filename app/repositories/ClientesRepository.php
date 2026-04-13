@@ -98,6 +98,7 @@ class ClientesRepository
             $sqlPersona = "INSERT INTO personas (
                 ap_paterno, ap_materno, nombres,
                 email, telefono, sexo, fecha_nacimiento,
+                edad,
                 curp, clave_elector, foto_ruta,
                 dom_calle, dom_numero, dom_cruz1, dom_cruz2,
                 dom_colonia, dom_cp, idestado, idmunicipio, dom_referencia,
@@ -105,6 +106,7 @@ class ClientesRepository
             ) VALUES (
                 :ap_paterno, :ap_materno, :nombres,
                 :email, :telefono, :sexo, :fecha_nacimiento,
+                :edad,
                 :curp, :clave_elector, :foto_ruta,
                 :dom_calle, :dom_numero, :dom_cruz1, :dom_cruz2,
                 :dom_colonia, :dom_cp, :idestado, :idmunicipio, :dom_referencia,

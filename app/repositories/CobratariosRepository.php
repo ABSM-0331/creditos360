@@ -88,6 +88,7 @@ class CobratariosRepository
                         COALESCE(SUM(hp.monto_pagado), 0) AS total_cobrado
                     FROM historial_pagos hp
                     INNER JOIN creditos c ON c.idcredito = hp.idcredito
+                    WHERE hp.fecha_pago = CURDATE()
                     GROUP BY c.idcobratario
                 ) cob ON cob.idcobratario = p.idpersona
                 WHERE p.idrol = 3

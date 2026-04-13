@@ -377,6 +377,62 @@ class CreditosRepository
         return (float)($row['total_cobrado'] ?? 0);
     }
 
+    public function obtenerTotalCobradoCobratarioHoy(int $idCobratario): float
+    {
+        $sql = "SELECT COALESCE(SUM(hp.monto_pagado), 0) AS total_cobrado
+                FROM historial_pagos hp
+                INNER JOIN creditos c ON c.idcredito = hp.idcredito
+                WHERE c.idcobratario = :idcobratario
+                  AND hp.fecha_pago = CURDATE()";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':idcobratario' => $idCobratario]);
+        $row = $stmt->fetch();
+
+        return (float)($row['total_cobrado'] ?? 0);
+    }
+
+    public function obtenerTotalCobradoHoyGlobal(): float
+    {
+        $sql = "SELECT COALESCE(SUM(monto_pagado), 0) AS total_cobrado
+                FROM historial_pagos
+                WHERE fecha_pago = CURDATE()";
+
+        $stmt = $this->db->query($sql);
+        $row = $stmt ? $stmt->fetch() : [];
+
+        return (float)($row['total_cobrado'] ?? 0);
+    }
+
+    public function obtenerPendienteCobroCobratarioHoy(int $idCobratario): float
+    {
+        $sql = "SELECT COALESCE(SUM(pc.monto_programado), 0) AS pendiente_hoy
+                FROM pagos_credito pc
+                INNER JOIN creditos c ON c.idcredito = pc.idcredito
+                WHERE c.idcobratario = :idcobratario
+                  AND DATE(pc.fecha_programada) = CURDATE()
+                  AND pc.estado = 'pendiente'";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':idcobratario' => $idCobratario]);
+        $row = $stmt->fetch();
+
+        return (float)($row['pendiente_hoy'] ?? 0);
+    }
+
+    public function obtenerPendienteCobroHoyGlobal(): float
+    {
+        $sql = "SELECT COALESCE(SUM(monto_programado), 0) AS pendiente_hoy
+                FROM pagos_credito
+                WHERE DATE(fecha_programada) = CURDATE()
+                  AND estado = 'pendiente'";
+
+        $stmt = $this->db->query($sql);
+        $row = $stmt ? $stmt->fetch() : [];
+
+        return (float)($row['pendiente_hoy'] ?? 0);
+    }
+
     /**
      * Obtener avance de cobranza por cobratario para un rango de fechas.
      * Si no se envían IDs, regresa todos los cobratarios.

@@ -41,7 +41,7 @@
                     </div>
                     <div class="stat">
                         <span class="stat-number">$<?= number_format((float)($cobratario['total_cobrado'] ?? 0), 2, '.', ',') ?></span>
-                        <span class="stat-text">Cobrado</span>
+                        <span class="stat-text">Cobrado hoy</span>
                     </div>
                 </div>
                 <div class="person-actions">

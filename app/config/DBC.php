@@ -6,9 +6,9 @@ class DBC
     private static array $config = [
         'host' => 'localhost',
         'port' => 3306,
-        'db' => 'crediox',
+        'db' => 'credioxcopia',
         'user' => 'root',
-        'password' => '',
+        'password' => 'Benjaminsosa?',
         'charset' => 'utf8mb4',
     ];
 

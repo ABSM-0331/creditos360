@@ -13,8 +13,8 @@ class ClientesService
         return $this->repository->obtenerTodos();
     }
 
-    public function crearCliente(array $data): void
+    public function crearCliente(array $data): int
     {
-        $this->repository->crearCliente($data);
+        return $this->repository->crearCliente($data);
     }
 }

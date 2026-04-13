@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Gestión</title>
     <?php
+    $baseUrl = '/proyecto-residencia/public';
+    // $baseUrl = '';
     $cssPath = __DIR__ . '/../../../public/assets/css/styles.css';
     $cssVersion = file_exists($cssPath) ? filemtime($cssPath) : time();
     ?>
@@ -19,7 +21,7 @@
             } catch (e) {}
         })();
     </script>
-    <link rel="stylesheet" href="/assets/css/styles.css?v=<?= (int)$cssVersion ?>">
+    <link rel="stylesheet" href="<?= $baseUrl ?>/assets/css/styles.css?v=<?= (int)$cssVersion ?>">
 </head>
 
 <body>
@@ -42,7 +44,7 @@
         </main>
     </div>
 
-    <script src="/assets/js/app.js"></script>
+    <script src="<?= $baseUrl ?>/assets/js/app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <?php if ($flashSuccess): ?>
         <script>

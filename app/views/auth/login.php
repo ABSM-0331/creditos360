@@ -5,7 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iniciar Sesión - GestiónPro</title>
-    <link rel="stylesheet" href="/assets/css/styles.css">
+    <?php
+    $baseUrl = '/proyecto-residencia/public';
+    // $baseUrl = '';
+    ?>
+    <link rel="stylesheet" href="<?= $baseUrl ?>/assets/css/styles.css?v=<?= $cssVersion ?>">
 </head>
 
 <body class="auth-body">

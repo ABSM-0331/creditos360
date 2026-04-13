@@ -74,7 +74,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     overlay.addEventListener("click", closeSidebar);
 
-    document.querySelectorAll(".sidebar .nav-link").forEach((link) => {
+    document.querySelectorAll(".sidebar a.nav-link").forEach((link) => {
         link.addEventListener("click", function () {
             if (window.innerWidth <= 1024) {
                 closeSidebar();
